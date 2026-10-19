@@ -6,8 +6,16 @@ import { homedir } from "node:os";
 import { emitList } from "../output/toon.js";
 import { helpBlock } from "../output/suggest.js";
 
+/** Short line for CLI home / --help headers. */
 export const DESCRIPTION =
   "Local-first workshop: Pepsi Paradox → onlyness statement → truthmode";
+
+/**
+ * Agent Skills frontmatter description — when to use + hard rules.
+ * Keep this the discovery surface; playbook text lives in the CLI.
+ */
+export const SKILL_DESCRIPTION =
+  "Use when positioning, USP stuckness, Pepsi Paradox framing, feature-creep prune, or drafting an onlyness statement. Gather mutual context first; run via npx -y onlyness-axi; fetch playbooks from the CLI; coach ≤3 turns/step (clarify → ground → mirror); never skip Act 0 or truthmode.";
 
 export const SPEC_VERSION = "axi/1.0-2026-07";
 
@@ -28,14 +36,21 @@ export function homeBody(tool: string): string {
     "commands",
     [
       { command: `${tool} start`, summary: "Create session + open surface" },
+      { command: `${tool} serve <id>`, summary: "Long-lived HTTP surface daemon" },
       { command: `${tool} poll <id>`, summary: "Long-poll human events" },
-      { command: `${tool} playbook <id>`, summary: "Fetch step guidance" },
+      { command: `${tool} reply <id>`, summary: "Post coach message to surface" },
+      { command: `${tool} advance <id>`, summary: "Move to next step when gated" },
+      { command: `${tool} playbook <id>`, summary: "Fetch step / coach / prune guidance" },
+      { command: `${tool} truthmode check <id>`, summary: "Run Pass 1 rubric" },
+      { command: `${tool} result <id>`, summary: "Worksheet + statement + truthmode" },
+      { command: `${tool} end <id>`, summary: "End session; close idle servers" },
+      { command: `${tool} list`, summary: "List active workshop sessions" },
     ],
     ["command", "summary"],
   );
   const help = helpBlock([
     `${tool} start --entry blank`,
-    `${tool} list`,
+    `${tool} playbook paradox`,
     `${tool} --help`,
   ]);
   return [table, help].join("\n");
@@ -53,6 +68,7 @@ export function rootHelpText(): string {
     [
       { command: "list", summary: "List active workshop sessions" },
       { command: "start", summary: "Create session, surface, and local server" },
+      { command: "serve", summary: "Run long-lived HTTP surface + event bus" },
       { command: "poll", summary: "Long-poll human submit / need-coach events" },
       { command: "reply", summary: "Post coach or system message to surface" },
       { command: "advance", summary: "Move to next step when gate is ready" },
@@ -82,18 +98,52 @@ export function rootHelpText(): string {
   ].join("\n");
 }
 
+/** Thin agent rules — discovery only; playbooks stay in the CLI. */
+function skillRules(): string {
+  return [
+    "## When to use",
+    "",
+    "Positioning, USP stuckness, Pepsi Paradox teaching, feature-creep prune, or drafting `I am the only ______ that ______`.",
+    "",
+    "## How to run",
+    "",
+    "- Invoke with `npx -y onlyness-axi` (no global install).",
+    "- Before `start` / during Act 0: gather **mutual context** (chat, memory tools if present, prior `.onlyness/` sessions, seed) and prefill arena / pick a fitting worked example.",
+    "- Fetch guidance on demand: `playbook <id>` (`paradox`, `arena`, `stand`, `axis`, `off-axis`, `onlyness`, `truthmode`, `prune`, `coach`). Do not paste stale playbooks into this skill.",
+    "",
+    "## Coach budget (per step)",
+    "",
+    "Up to **3** turns, then stop and offer exits — not another roast:",
+    "",
+    "1. **Clarify** — make the answer specific",
+    "2. **Ground** — reframe with their arena / mutual context",
+    "3. **Mirror** — adversarial “a rival could say the same…”",
+    "",
+    "Do not burn budget on generic lectures when arena is empty — fill arena first. Prefer send-back over pep talk on weak/fail truthmode.",
+    "",
+    "## Hard rules",
+    "",
+    "- **Never skip Act 0** (Pepsi Paradox ack + arena + worked example) before Step 1.",
+    "- **Never skip truthmode** after a drafted onlyness statement.",
+  ].join("\n");
+}
+
 /** The static SKILL.md: home content with zero-install command forms. */
 export function renderSkill(): string {
   const frontmatter = [
     "---",
     "name: onlyness",
-    `description: "${DESCRIPTION.replace(/"/g, "'")}"`,
+    `description: "${SKILL_DESCRIPTION.replace(/"/g, "'")}"`,
     "---",
   ].join("\n");
   const body = [
-    "# onlyness-axi",
+    "# onlyness",
     "",
     `${DESCRIPTION} (built against AXI spec ${SPEC_VERSION}). Run the commands below with npx — no install needed.`,
+    "",
+    skillRules(),
+    "",
+    "## Commands",
     "",
     "```",
     homeBody("npx -y onlyness-axi"),
