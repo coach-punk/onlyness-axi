@@ -195,7 +195,7 @@ export function renderSurface(session: Session): string {
 <header>
   <h1>Onlyness workshop</h1>
   <p class="meta">Session ${escapeHtml(session.id)} · step <strong id="step-label">${escapeHtml(step)}</strong>
-    · coach ${session.coachBudget.used}/${session.coachBudget.max}</p>
+    · coach <span id="coach-budget-header">${session.coachBudget.used}/${session.coachBudget.max}</span></p>
 </header>
 <main>
 <div id="workshop">
@@ -309,7 +309,7 @@ export function renderSurface(session: Session): string {
 <aside id="coach-panel">
   <section>
     <h2>Coach</h2>
-    <p class="muted">Budget ${session.coachBudget.used}/${session.coachBudget.max}${session.coachBudget.lastJob ? ` · last: ${escapeHtml(session.coachBudget.lastJob)}` : ""}</p>
+    <p class="muted" id="coach-budget-aside">Budget ${session.coachBudget.used}/${session.coachBudget.max}${session.coachBudget.lastJob ? ` · last: ${escapeHtml(session.coachBudget.lastJob)}` : ""}</p>
     <div id="coach-log">
 ${coachEntriesHtml(session.coachLog)}
     </div>
@@ -454,6 +454,36 @@ ${coachEntriesHtml(session.coachLog)}
         "<p>" + escapeText(e.text) + "</p></div>";
     }).join("");
   }
+  var STEP_SECS = {
+    paradox: "sec-paradox",
+    arena: "sec-arena",
+    stand: "sec-stand",
+    axis: "sec-axis",
+    off_axis: "sec-off-axis",
+    onlyness: "sec-onlyness",
+    truthmode: "sec-truthmode",
+    done: "sec-done"
+  };
+  function syncStepSections(step) {
+    if (!step) return;
+    Object.keys(STEP_SECS).forEach(function (id) {
+      var el = document.getElementById(STEP_SECS[id]);
+      if (!el) return;
+      if (id === step) el.classList.remove("hidden");
+      else el.classList.add("hidden");
+    });
+  }
+  function refreshCoachBudget(budget) {
+    if (!budget) return;
+    var label = budget.used + "/" + budget.max;
+    var header = document.getElementById("coach-budget-header");
+    if (header) header.textContent = label;
+    var aside = document.getElementById("coach-budget-aside");
+    if (aside) {
+      aside.textContent = "Budget " + label +
+        (budget.lastJob ? " · last: " + budget.lastJob : "");
+    }
+  }
   function refreshSession() {
     fetch("/api/session")
       .then(function (r) { return r.json(); })
@@ -466,6 +496,8 @@ ${coachEntriesHtml(session.coachLog)}
         }
         var stepLabel = document.getElementById("step-label");
         if (stepLabel && s.step) stepLabel.textContent = s.step;
+        syncStepSections(s.step);
+        refreshCoachBudget(s.coachBudget);
       })
       .catch(function () { /* ignore transient poll errors */ });
   }

@@ -46,3 +46,12 @@ export function substantiveChanged(a: string, b: string): boolean {
 export function resetBudget(session: Session): Session {
   return { ...session, coachBudget: { used: 0, max: 3, lastJob: null } };
 }
+
+/** Reset coach budget when step answer text changed in a substantive way. */
+export function resetBudgetIfAnswerChanged(
+  session: Session,
+  before: string,
+  after: string,
+): Session {
+  return substantiveChanged(before, after) ? resetBudget(session) : session;
+}

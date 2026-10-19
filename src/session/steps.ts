@@ -1,3 +1,4 @@
+import { resetBudgetIfAnswerChanged } from "./coach.js";
 import type { Arena, Session, StepId, TruthmodeState } from "./types.js";
 
 export type HumanSubmitPayload = {
@@ -46,7 +47,63 @@ function nonEmpty(...vals: string[]): boolean {
   return vals.every((v) => v.trim().length > 0);
 }
 
+function answerField(
+  answers: Record<string, unknown>,
+  key: string,
+  field: string,
+): string {
+  const block = answers[key];
+  if (!block || typeof block !== "object" || Array.isArray(block)) return "";
+  const v = (block as Record<string, unknown>)[field];
+  return typeof v === "string" ? v : "";
+}
+
+/** Serializable blob of the current step's substantive answer content. */
+export function stepAnswerBlob(session: Session): string {
+  switch (session.step) {
+    case "paradox":
+      return "";
+    case "arena":
+      return [
+        session.arena.industry,
+        session.arena.offering,
+        session.arena.audience,
+      ].join("\n");
+    case "stand":
+      return [
+        answerField(session.answers, "stand", "who"),
+        answerField(session.answers, "stand", "job"),
+        answerField(session.answers, "stand", "solved"),
+      ].join("\n");
+    case "axis":
+      return [
+        answerField(session.answers, "axis", "scale"),
+        answerField(session.answers, "axis", "place"),
+        answerField(session.answers, "axis", "ifWin"),
+      ].join("\n");
+    case "off_axis":
+      return answerField(session.answers, "off_axis", "territory");
+    case "onlyness":
+      return session.statement;
+    case "truthmode": {
+      const t = session.truthmode;
+      if (!t) return "";
+      return [t.itch, t.sticky, t.jackBlack, t.cuts.join("\n")].join("\n");
+    }
+    case "done":
+      return "";
+    default: {
+      const _exhaustive: never = session.step;
+      return String(_exhaustive);
+    }
+  }
+}
+
 export function canAdvance(session: Session): { ok: boolean; reason?: string } {
+  // Calm exit after coach budget exhaust: weakAdvance unlocks incomplete steps.
+  if (session.weakAdvance && session.step !== "done") {
+    return { ok: true };
+  }
   switch (session.step) {
     case "paradox":
       return session.paradoxAck
@@ -106,6 +163,8 @@ export function applyHumanSubmit(
   session: Session,
   payload: HumanSubmitPayload,
 ): Session {
+  const beforeBlob = stepAnswerBlob(session);
+
   const truthmode =
     payload.truthmode !== undefined
       ? {
@@ -114,7 +173,7 @@ export function applyHumanSubmit(
         }
       : session.truthmode;
 
-  return {
+  let next: Session = {
     ...session,
     ...(payload.paradoxAck === true ? { paradoxAck: true } : {}),
     ...(payload.arena
@@ -138,6 +197,10 @@ export function applyHumanSubmit(
       },
     ],
   };
+
+  const afterBlob = stepAnswerBlob(next);
+  next = resetBudgetIfAnswerChanged(next, beforeBlob, afterBlob);
+  return next;
 }
 
 export function advanceSession(session: Session): Session {

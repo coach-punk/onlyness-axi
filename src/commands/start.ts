@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
 import type { CommandModule } from "../cli/router.js";
@@ -52,7 +52,7 @@ function entryBin(): string {
   );
 }
 
-function spawnServe(sessionId: string): void {
+function spawnServe(sessionId: string): ChildProcess {
   const child = spawn(
     process.execPath,
     [entryBin(), "serve", sessionId],
@@ -64,6 +64,31 @@ function spawnServe(sessionId: string): void {
     },
   );
   child.unref();
+  return child;
+}
+
+function tryKillPid(pid: number): void {
+  try {
+    process.kill(pid);
+  } catch {
+    // Process may already be gone.
+  }
+}
+
+/** Kill orphaned serve if ready-wait fails (prefer server.json pid). */
+function killOrphanServe(
+  rootDir: string,
+  sessionId: string,
+  spawnPid: number | undefined,
+): void {
+  const meta = readServerMeta(rootDir, sessionId);
+  if (meta?.pid) {
+    tryKillPid(meta.pid);
+    return;
+  }
+  if (typeof spawnPid === "number" && spawnPid > 0) {
+    tryKillPid(spawnPid);
+  }
 }
 
 async function waitForServeReady(
@@ -164,8 +189,14 @@ export const startCommand: CommandModule = {
     }
     writeSurfaceFile(session);
 
-    spawnServe(session.id);
-    const port = await waitForServeReady(rootDir, session.id);
+    const serveChild = spawnServe(session.id);
+    let port: number;
+    try {
+      port = await waitForServeReady(rootDir, session.id);
+    } catch (err) {
+      killOrphanServe(rootDir, session.id, serveChild.pid);
+      throw err;
+    }
 
     const url = `http://127.0.0.1:${port}/`;
     openBrowser(url);

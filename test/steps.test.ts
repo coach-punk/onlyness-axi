@@ -63,4 +63,58 @@ describe("steps", () => {
     };
     expect(canAdvance(s).ok).toBe(true);
   });
+
+  it("weakAdvance unlocks stand when answers incomplete", () => {
+    const s = createSession({});
+    s.step = "stand";
+    s.coachBudget = { used: 3, max: 3, lastJob: "mirror" };
+    expect(canAdvance(s).ok).toBe(false);
+    s.weakAdvance = true;
+    expect(canAdvance(s).ok).toBe(true);
+    const next = advanceSession(s);
+    expect(next.step).toBe("axis");
+    expect(next.weakAdvance).toBe(false);
+  });
+
+  it("weakAdvance still blocked on done", () => {
+    const s = createSession({});
+    s.step = "done";
+    s.weakAdvance = true;
+    expect(canAdvance(s).ok).toBe(false);
+  });
+
+  it("resets coach budget when stand answers change substantively", () => {
+    let s = createSession({});
+    s.step = "stand";
+    s.coachBudget = { used: 2, max: 3, lastJob: "ground" };
+    s = applyHumanSubmit(s, {
+      answers: { stand: { who: "buyers", job: "skip the lot", solved: "car arrives" } },
+    });
+    expect(s.coachBudget).toEqual({ used: 0, max: 3, lastJob: null });
+  });
+
+  it("does not reset budget on paradoxAck-only or weakAdvance-only", () => {
+    let s = createSession({});
+    s.coachBudget = { used: 2, max: 3, lastJob: "ground" };
+    s = applyHumanSubmit(s, { paradoxAck: true });
+    expect(s.coachBudget.used).toBe(2);
+    expect(s.paradoxAck).toBe(true);
+
+    s.step = "stand";
+    s.coachBudget = { used: 3, max: 3, lastJob: "mirror" };
+    s = applyHumanSubmit(s, { weakAdvance: true });
+    expect(s.coachBudget.used).toBe(3);
+    expect(s.weakAdvance).toBe(true);
+  });
+
+  it("does not reset budget on whitespace-only stand re-submit", () => {
+    let s = createSession({});
+    s.step = "stand";
+    s.answers = { stand: { who: "buyers", job: "skip lot", solved: "done" } };
+    s.coachBudget = { used: 1, max: 3, lastJob: "clarify" };
+    s = applyHumanSubmit(s, {
+      answers: { stand: { who: "  Buyers ", job: "skip  lot", solved: "done" } },
+    });
+    expect(s.coachBudget.used).toBe(1);
+  });
 });
