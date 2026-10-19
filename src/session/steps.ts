@@ -1,4 +1,30 @@
-import type { Session, StepId } from "./types.js";
+import type { Arena, Session, StepId, TruthmodeState } from "./types.js";
+
+export type HumanSubmitPayload = {
+  paradoxAck?: boolean;
+  arena?: Partial<Arena>;
+  answers?: Record<string, unknown>;
+  statement?: string;
+  truthmode?: Partial<TruthmodeState>;
+  weakAdvance?: boolean;
+};
+
+function emptyTruthmode(): TruthmodeState {
+  return {
+    verdict: null,
+    checks: [],
+    swap: "",
+    itch: "",
+    sticky: "",
+    jackBlack: "",
+    cuts: [],
+  };
+}
+
+function humanSubmitSummary(payload: HumanSubmitPayload): string {
+  const keys = Object.keys(payload);
+  return keys.length > 0 ? `submit: ${keys.join(", ")}` : "submit: (empty)";
+}
 
 export const STEP_ORDER: StepId[] = [
   "paradox",
@@ -74,6 +100,44 @@ export function canAdvance(session: Session): { ok: boolean; reason?: string } {
       return { ok: false, reason: String(_exhaustive) };
     }
   }
+}
+
+export function applyHumanSubmit(
+  session: Session,
+  payload: HumanSubmitPayload,
+): Session {
+  const truthmode =
+    payload.truthmode !== undefined
+      ? {
+          ...(session.truthmode ?? emptyTruthmode()),
+          ...payload.truthmode,
+        }
+      : session.truthmode;
+
+  return {
+    ...session,
+    ...(payload.paradoxAck === true ? { paradoxAck: true } : {}),
+    ...(payload.arena
+      ? { arena: { ...session.arena, ...payload.arena } }
+      : {}),
+    ...(payload.answers
+      ? { answers: { ...session.answers, ...payload.answers } }
+      : {}),
+    ...(typeof payload.statement === "string"
+      ? { statement: payload.statement }
+      : {}),
+    ...(payload.truthmode !== undefined ? { truthmode } : {}),
+    ...(payload.weakAdvance === true ? { weakAdvance: true } : {}),
+    coachLog: [
+      ...session.coachLog,
+      {
+        at: new Date().toISOString(),
+        step: session.step,
+        role: "human",
+        text: humanSubmitSummary(payload),
+      },
+    ],
+  };
 }
 
 export function advanceSession(session: Session): Session {
