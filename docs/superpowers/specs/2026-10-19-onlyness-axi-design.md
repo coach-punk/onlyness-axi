@@ -17,8 +17,9 @@ A greenfield **AXI** (Agent eXperience Interface): installable agent skill + `np
 
 ## Goals
 
-- Walk a human through Pepsi Paradox → four steps → onlyness statement → truthmode
-- Agent coaches between steps (one sharp pushback per turn)
+- Walk a human through Pepsi Paradox → arena + worked example → four steps → onlyness statement → truthmode
+- Agent coaches between steps with a **per-step budget** (clarify → ground → mirror), then calm exits — not a single pushback and not an infinite roast
+- Tailor the experience from **mutual understanding**: conversation context, seed, prior `.onlyness` sessions, and any memory the agent already has about this human/product
 - Optional seed (URL/one-pager/blurb); blank by default
 - Truthmode: rubric + adversarial swap + Carvana/Jack Black bar
 - Support **find** and **prune** entry intents
@@ -28,6 +29,7 @@ A greenfield **AXI** (Agent eXperience Interface): installable agent skill + `np
 
 - Accounts, cloud sync, hosted multiplayer
 - Auto site scraping beyond optional pasted seed
+- Requiring a specific memory product (Supermemory, etc.) — use what’s available; degrade gracefully to arena + seed + conversation
 - Generating a full marketing site or brand system (downstream of `result`)
 - Replacing Lavish or wrapping it as a dependency
 
@@ -49,12 +51,13 @@ CLI ──► .onlyness/<slug>/
 ### Session lifecycle
 
 1. `onlyness-axi start [--seed …] [--entry blank|seed|prune]` — create session, open browser, return TOON (`session`, `step`, `next[]`)
-2. Human works current act/step on `surface.html`
-3. `onlyness-axi poll <session>` — long-poll until submit, need-coach, or advance
-4. Agent coaches (max one pushback), may `reply`, human revises
-5. Advance: paradox → stand → axis → off-axis → onlyness draft → truthmode
-6. `onlyness-axi result <session>` — worksheet + statement + truthmode verdict
-7. `onlyness-axi end <session>` — close session
+2. Agent loads **mutual context** (chat, memory tools if present, prior sessions under `.onlyness/`, seed) and may `reply` an arena draft / tailored example before the human starts typing
+3. Human works current act/step on `surface.html`
+4. `onlyness-axi poll <session>` — long-poll until submit, need-coach, or advance
+5. Agent coaches within the step’s **3-turn budget**, may `reply`, human revises
+6. Advance: paradox → arena+example → stand → axis → off-axis → onlyness draft → truthmode
+7. `onlyness-axi result <session>` — worksheet + statement + truthmode verdict
+8. `onlyness-axi end <session>` — close session
 
 Bare `onlyness-axi` (no args) lists active sessions (AXI content-first).
 
@@ -72,17 +75,29 @@ Bare `onlyness-axi` (no args) lists active sessions (AXI content-first).
 | `playbook <id>` | On-demand step/truthmode/prune guidance |
 | `--help` | Concise per-subcommand reference |
 
-Playbook ids: `paradox`, `stand`, `axis`, `off-axis`, `onlyness`, `truthmode`, `prune`.
+Playbook ids: `paradox`, `arena`, `stand`, `axis`, `off-axis`, `onlyness`, `truthmode`, `prune`, `coach`.
 
 ## Workshop arc
 
-### Act 0 — Pepsi Paradox
+### Act 0 — Pepsi Paradox + arena + worked example
 
-Teach why “better” isn’t the game (blind taste vs branded choice). Gate: human acknowledges “I get why better isn’t the game” before Step 1 unlocks. Copy also mentions mid-lifecycle pruning: sharpening focus by cutting.
+**Why (paradox):** Teach why “better” isn’t the game (blind taste vs branded choice). Copy also mentions mid-lifecycle pruning: sharpening focus by cutting.
+
+**Where (arena):** Before Step 1, capture a short **arena** block so coaching isn’t generic and the human knows the assignment’s setting:
+
+- Industry / category
+- Product or service (one line)
+- Who you sell to (one line)
+
+Seed and mutual memory may prefill arena; human can edit. Gate: paradox ack **and** arena filled enough to ground examples.
+
+**How (worked example):** Show one miniature full arc (default Carvana-style, or an analogue closer to their arena when mutual context allows) so “stand → axis → off-axis → onlyness” is visible before they do their own. The example is teaching, not their answer.
+
+Only then unlock Step 1.
 
 ### Step 1 — Where do you stand
 
-Capture **problem parameters**: who hurts, what job they’re hiring for, constraints, what “solved” looks like. Coach rejects vague category wishes (“people need a website”).
+Capture **problem parameters**: who hurts, what job they’re hiring for, constraints, what “solved” looks like. Coach rejects vague category wishes (“people need a website”), using arena language.
 
 ### Step 2 — Axis of better
 
@@ -94,11 +109,34 @@ Leave fizzy-water. Own the Coca-Cola summer-day job (feeling / ritual / identity
 
 ### Step 4 — Draft onlyness
 
-Fill: `I am the only ______ that ______`. Unique as a **paradigm**, not geographic or category scarcity. Agent may offer 2–3 candidates; human owns final wording.
+Fill: `I am the only ______ that ______`. Unique as a **paradigm**, not geographic or category scarcity. Agent may offer 2–3 candidates grounded in arena + prior understanding; human owns final wording.
+
+### Coach budget (per step)
+
+Stubborn or confused humans need more than one nudge; infinite roasting loses them. Per step, up to **3 coach turns**, then stop and offer exits:
+
+| Turn | Job | Intent |
+| --- | --- | --- |
+| 1 | **Clarify** | Make the answer specific |
+| 2 | **Ground** | Reframe using their arena / mutual context |
+| 3 | **Mirror** | Adversarial “a rival could say the same…” |
+
+After budget exhausted, surface offers calm exits (not another roast): **show examples**, **I’m stuck / need-coach** (agent may widen context or swap example), or **advance with weak flag**. Reset the 3-turn budget when the step’s substantive answer changes (not on typos).
+
+### Mutual understanding
+
+The skill instructs the agent to **prefer existing shared context** over starting from zero:
+
+- Current conversation and any product/project facts already established
+- Optional memory tools if connected (e.g. prior VOLUMES / brand work) — never required
+- Prior local sessions in `.onlyness/` (read `result` / arena / statement for continuity)
+- `seed.md` when present
+
+Tailoring means: arena prefills, worked-example choice, coach metaphors, and candidate onlyness lines should sound like *this* human’s world. Persist what was used under `contextSources[]` on the session for transparency (not a cloud profile).
 
 ### Between steps
 
-Human submits → `poll` → agent coaches → `reply` → revise or advance. Optional seed pre-fills Step 1 as draft, marked fight-with-me. After Steps 3–4 and in truthmode, coach may ask: *If this onlyness were true, what would you cut?*
+Human submits → `poll` → agent coaches within budget → `reply` → revise or advance. Optional seed pre-fills Step 1 as draft, marked fight-with-me. After Steps 3–4 and in truthmode, coach may ask: *If this onlyness were true, what would you cut?*
 
 ## Truthmode
 
@@ -141,7 +179,8 @@ Thin `onlyness` skill (Agent Skills format):
 - When to use: positioning, USP stuckness, Pepsi Paradox, feature-creep prune, onlyness statement work
 - Invoke via `npx -y onlyness-axi` (no global install required)
 - Current workflow/guidance from CLI (`--help`, `playbook`) — skill file must not duplicate stale playbooks
-- Coach rules: one pushback max per poll cycle; never skip Act 0 or truthmode; prefer send-back over pep talk on weak/fail
+- Before `start` / during Act 0: gather mutual context; prefill arena and pick a worked example that fits when possible
+- Coach rules: up to 3 turns per step (clarify → ground → mirror), then exits; never skip Act 0 (paradox + arena + example) or truthmode; prefer send-back over pep talk on weak/fail; do not burn budget on generic lectures when arena is empty — fill arena first
 
 ## Data model
 
@@ -156,10 +195,13 @@ Directory: `.onlyness/<slug>/`
 | `entry` | `blank` \| `seed` \| `prune` |
 | `step` | Current act/step id |
 | `paradoxAck` | boolean |
+| `arena` | `{ industry, offering, audience }` |
+| `contextSources` | What mutual context was used (chat / memory / priorSession / seed) |
 | `answers` | Per-step structured answers |
 | `statement` | Draft / final onlyness string |
 | `truthmode` | `{ verdict, checks[], swap, itch, sticky, jackBlack, cuts[] }` |
 | `coachLog` | Chronological coach/human turns |
+| `coachBudget` | Per-step `{ used, max: 3, lastJob }` |
 
 Optional `seed.md` when started with seed material.
 
@@ -170,6 +212,9 @@ Follow axi/1.0 principles: TOON output, minimal defaults, truncation with `--ful
 ## Success criteria
 
 - Agent can run a full blank session end-to-end via CLI alone
+- Act 0 leaves the human with paradox *and* a clear assignment (arena + worked example) before Step 1
+- Coach stops after 3 turns per step and offers exits instead of looping
+- When prior context exists, arena/examples/candidates reflect it (`contextSources` non-empty); when not, blank path still works
 - Seed and prune entry paths work without separate products
 - Truthmode rejects the “only used-car salesman on this curb” class of statements
 - Adversarial swap visibly wakes the human when the claim is generic
@@ -181,3 +226,4 @@ Follow axi/1.0 principles: TOON output, minimal defaults, truncation with `--ful
 - Rubric scoring weights (fail vs weak thresholds)
 - Package repo layout (TypeScript vs JS) and publish name confirmation
 - Attribution/wording for Pepsi Paradox teaching copy (fair-use teaching, not trademark misuse in examples)
+- How aggressively to scan prior `.onlyness/` sessions vs asking the human to pick one
