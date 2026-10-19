@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { setTimeout as delay } from "node:timers/promises";
 import type { CommandModule } from "../cli/router.js";
-import { UsageError } from "../output/errors.js";
+import { AxiError, UsageError } from "../output/errors.js";
 import { emitBlock, emitKV, print } from "../output/toon.js";
 import type { EntryKind } from "../session/types.js";
 import {
@@ -9,10 +10,12 @@ import {
   saveSession,
   writeSeed,
 } from "../session/store.js";
-import { ensureServer } from "../server/handles.js";
+import { readServerMeta } from "../server/meta.js";
 import { root, writeSurfaceFile } from "./session-io.js";
 
 const ENTRIES: EntryKind[] = ["blank", "seed", "prune"];
+const SERVER_WAIT_MS = 5_000;
+const SERVER_POLL_MS = 50;
 
 function openBrowser(url: string): void {
   if (process.env["ONLYNESS_NO_BROWSER"] === "1") return;
@@ -38,6 +41,52 @@ function openBrowser(url: string): void {
   } catch {
     // Browser open is best-effort.
   }
+}
+
+function entryBin(): string {
+  const fromArgv = process.argv[1];
+  if (fromArgv && fromArgv.length > 0) return fromArgv;
+  throw new AxiError(
+    "cannot locate onlyness-axi binary",
+    "run via bin/onlyness-axi.js or the installed CLI",
+  );
+}
+
+function spawnServe(sessionId: string): void {
+  const child = spawn(
+    process.execPath,
+    [entryBin(), "serve", sessionId],
+    {
+      detached: true,
+      stdio: "ignore",
+      cwd: process.cwd(),
+      env: process.env,
+    },
+  );
+  child.unref();
+}
+
+async function waitForServeReady(
+  rootDir: string,
+  sessionId: string,
+): Promise<number> {
+  const deadline = Date.now() + SERVER_WAIT_MS;
+  while (Date.now() < deadline) {
+    const meta = readServerMeta(rootDir, sessionId);
+    if (meta) {
+      try {
+        const res = await fetch(`http://127.0.0.1:${meta.port}/`);
+        if (res.ok) return meta.port;
+      } catch {
+        // Server may still be binding — retry.
+      }
+    }
+    await delay(SERVER_POLL_MS);
+  }
+  throw new AxiError(
+    `serve did not become ready for ${sessionId}`,
+    `run onlyness-axi serve ${sessionId}`,
+  );
 }
 
 export const startCommand: CommandModule = {
@@ -115,21 +164,17 @@ export const startCommand: CommandModule = {
     }
     writeSurfaceFile(session);
 
-    const server = await ensureServer({
-      rootDir,
-      sessionId: session.id,
-    });
-    session.port = server.port;
-    saveSession(rootDir, session);
+    spawnServe(session.id);
+    const port = await waitForServeReady(rootDir, session.id);
 
-    const url = `http://127.0.0.1:${server.port}/`;
+    const url = `http://127.0.0.1:${port}/`;
     openBrowser(url);
 
     print(
       emitKV([
         ["session", session.id],
         ["step", session.step],
-        ["port", server.port],
+        ["port", port],
         ["url", url],
         ["entry", session.entry],
       ]),

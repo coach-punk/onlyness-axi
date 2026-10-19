@@ -1,16 +1,22 @@
 import type { CommandModule } from "../cli/router.js";
 import { emitBlock, emitKV, print } from "../output/toon.js";
-import {
-  closeAllServers,
-  closeServer,
-} from "../server/handles.js";
+import { closeAllServers, closeServer } from "../server/handles.js";
+import { deleteServerMeta, readServerMeta } from "../server/meta.js";
 import { listSessions, saveSession } from "../session/store.js";
 import { requireSession, root } from "./session-io.js";
+
+function tryKillPid(pid: number): void {
+  try {
+    process.kill(pid);
+  } catch {
+    // Process may already be gone.
+  }
+}
 
 export const endCommand: CommandModule = {
   spec: {
     name: "end",
-    summary: "Mark session ended; close idle servers",
+    summary: "Mark session ended; stop serve daemon",
     args: [
       { name: "session", required: true, description: "session id" },
     ],
@@ -22,9 +28,16 @@ export const endCommand: CommandModule = {
     let session = requireSession(id);
     const rootDir = root();
 
+    const meta = readServerMeta(rootDir, session.id);
+    if (meta) {
+      tryKillPid(meta.pid);
+      deleteServerMeta(rootDir, session.id);
+    }
+
+    await closeServer(session.id);
+
     session = { ...session, status: "ended" };
     saveSession(rootDir, session);
-    await closeServer(session.id);
 
     const stillActive = listSessions(rootDir).some(
       (s) => s.status === "active" && s.id !== session.id,

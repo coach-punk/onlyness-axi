@@ -32,4 +32,28 @@ describe("http server", () => {
     const ev = await pending;
     expect(ev?.type).toBe("submit");
   });
+
+  it("GET /api/events long-polls and returns submit", async () => {
+    root = mkdtempSync(join(tmpdir(), "onlyness-"));
+    const s = createSession({});
+    saveSession(root, s);
+    const dir = join(root, s.id);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "surface.html"), "<html>ok</html>");
+    const srv = await startServer({ rootDir: root, sessionId: s.id, port: 0 });
+    close = srv.close;
+
+    const pending = fetch(
+      `http://127.0.0.1:${srv.port}/api/events?timeoutMs=2000`,
+    );
+    await fetch(`http://127.0.0.1:${srv.port}/api/submit`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ paradoxAck: true }),
+    });
+    const res = await pending;
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { event: { type: string } | null };
+    expect(body.event?.type).toBe("submit");
+  });
 });

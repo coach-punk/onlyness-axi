@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { pushEvent, type HumanEvent, type HumanEventType } from "./events.js";
+import { pushEvent, waitForEvent, type HumanEvent, type HumanEventType } from "./events.js";
 import { applyHumanSubmit, type HumanSubmitPayload } from "../session/steps.js";
 import { loadSession, saveSession, sessionDir } from "../session/store.js";
 
@@ -119,8 +119,18 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
         return;
       }
 
+      if (method === "GET" && path === "/api/events") {
+        const timeoutRaw = url.searchParams.get("timeoutMs");
+        const parsed = timeoutRaw !== null ? Number(timeoutRaw) : 60_000;
+        const timeoutMs =
+          Number.isFinite(parsed) && parsed >= 0 ? parsed : 60_000;
+        const event = await waitForEvent(sessionId, timeoutMs);
+        sendJson(res, 200, { event });
+        return;
+      }
+
       if (method === "GET" && path === "/api/poll") {
-        // Optional long-poll for browser; CLI uses in-process waitForEvent.
+        // Optional long-poll for browser; agents use GET /api/events.
         sendJson(res, 200, { events: [] });
         return;
       }

@@ -6,6 +6,7 @@ import { playbookCommand } from "./commands/playbook.js";
 import { pollCommand } from "./commands/poll.js";
 import { replyCommand } from "./commands/reply.js";
 import { resultCommand } from "./commands/result.js";
+import { serveCommand } from "./commands/serve.js";
 import { startCommand } from "./commands/start.js";
 import { truthmodeCommand } from "./commands/truthmode.js";
 
@@ -16,6 +17,7 @@ const registry: Registry = {
   commands: {
     list: listCommand,
     start: startCommand,
+    serve: serveCommand,
     poll: pollCommand,
     reply: replyCommand,
     advance: advanceCommand,

@@ -42,14 +42,46 @@ describe("onlyness-axi AXI contract", () => {
 
   it("start then list shows session", () => {
     const cwd = mkdtempSync(join(tmpdir(), "onlyness-cli-"));
+    const env = { ...process.env, ONLYNESS_NO_BROWSER: "1" };
     const r = spawnSync("node", [bin, "start", "--entry", "blank"], {
       encoding: "utf8",
       cwd,
-      env: { ...process.env, ONLYNESS_NO_BROWSER: "1" },
+      env,
     });
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/session:/);
-    const list = spawnSync("node", [bin], { encoding: "utf8", cwd });
+    const sessionMatch = r.stdout.match(/^session:\s*(\S+)/m);
+    expect(sessionMatch).toBeTruthy();
+    const sessionId = sessionMatch![1]!;
+    const list = spawnSync("node", [bin], { encoding: "utf8", cwd, env });
     expect(list.stdout).toMatch(/sessions\[/);
+    spawnSync("node", [bin, "end", sessionId], { encoding: "utf8", cwd, env });
+  });
+
+  it("HTTP stays up after start exits", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "onlyness-cli-"));
+    const env = { ...process.env, ONLYNESS_NO_BROWSER: "1" };
+    const r = spawnSync("node", [bin, "start", "--entry", "blank"], {
+      encoding: "utf8",
+      cwd,
+      env,
+    });
+    expect(r.status).toBe(0);
+    const portMatch = r.stdout.match(/^port:\s*(\d+)/m);
+    const sessionMatch = r.stdout.match(/^session:\s*(\S+)/m);
+    expect(portMatch).toBeTruthy();
+    expect(sessionMatch).toBeTruthy();
+    const port = Number(portMatch![1]);
+    const sessionId = sessionMatch![1]!;
+
+    const res = await fetch(`http://127.0.0.1:${port}/`);
+    expect(res.status).toBe(200);
+
+    const end = spawnSync("node", [bin, "end", sessionId], {
+      encoding: "utf8",
+      cwd,
+      env,
+    });
+    expect(end.status).toBe(0);
   });
 });

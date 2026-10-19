@@ -1,11 +1,44 @@
 import type { CommandModule } from "../cli/router.js";
+import { AxiError } from "../output/errors.js";
 import { emitBlock, emitKV, print, toonValue } from "../output/toon.js";
-import { waitForEvent } from "../server/events.js";
-import { ensureServer } from "../server/handles.js";
-import { loadSession, saveSession } from "../session/store.js";
+import type { HumanEvent } from "../server/events.js";
+import { readServerMeta } from "../server/meta.js";
+import { loadSession } from "../session/store.js";
 import { requireSession, root } from "./session-io.js";
 
 const POLL_MS = 60_000;
+
+function resolvePort(
+  sessionPort: number | undefined,
+  rootDir: string,
+  sessionId: string,
+): number {
+  if (typeof sessionPort === "number" && sessionPort > 0) return sessionPort;
+  const meta = readServerMeta(rootDir, sessionId);
+  if (meta) return meta.port;
+  throw new AxiError(
+    `no server for session ${sessionId}`,
+    `run onlyness-axi serve ${sessionId} (or start a new session)`,
+  );
+}
+
+function parseEventsBody(raw: unknown): HumanEvent | null {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new AxiError(
+      "invalid /api/events response",
+      "check that serve is running for this session",
+    );
+  }
+  const event = (raw as { event?: unknown }).event;
+  if (event === null || event === undefined) return null;
+  if (typeof event !== "object" || Array.isArray(event)) {
+    throw new AxiError(
+      "invalid event payload from /api/events",
+      "check that serve is running for this session",
+    );
+  }
+  return event as HumanEvent;
+}
 
 export const pollCommand: CommandModule = {
   spec: {
@@ -21,18 +54,29 @@ export const pollCommand: CommandModule = {
     const id = parsed.positionals[0]!;
     let session = requireSession(id);
     const rootDir = root();
+    const port = resolvePort(session.port, rootDir, session.id);
 
-    const server = await ensureServer({
-      rootDir,
-      sessionId: session.id,
-      port: session.port,
-    });
-    if (session.port !== server.port) {
-      session = { ...session, port: server.port };
-      saveSession(rootDir, session);
+    let body: unknown;
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:${port}/api/events?timeoutMs=${POLL_MS}`,
+      );
+      if (!res.ok) {
+        throw new AxiError(
+          `events request failed (${res.status})`,
+          `run onlyness-axi serve ${session.id}`,
+        );
+      }
+      body = await res.json();
+    } catch (err) {
+      if (err instanceof AxiError) throw err;
+      throw new AxiError(
+        `server unreachable on port ${port}`,
+        `run onlyness-axi serve ${session.id}`,
+      );
     }
 
-    const event = await waitForEvent(session.id, POLL_MS);
+    const event = parseEventsBody(body);
     session = loadSession(rootDir, session.id);
 
     if (!event) {
