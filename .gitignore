@@ -1,0 +1,4 @@
+.worktrees/
+.onlyness/
+node_modules/
+dist/
