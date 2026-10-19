@@ -1,0 +1,30 @@
+{
+  "name": "onlyness-axi",
+  "version": "0.1.0",
+  "description": "Local-first AXI workshop: Pepsi Paradox → onlyness statement → truthmode.",
+  "type": "module",
+  "bin": {
+    "onlyness-axi": "bin/onlyness-axi.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "skills",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "pretest": "npm run build",
+    "test": "vitest run",
+    "skill:gen": "node scripts/gen-skill.mjs",
+    "skill:check": "node scripts/gen-skill.mjs --check"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
