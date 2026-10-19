@@ -6,9 +6,8 @@ import { homedir } from "node:os";
 import { emitList } from "../output/toon.js";
 import { helpBlock } from "../output/suggest.js";
 
-// TODO: one sentence describing what onlyness-axi does (shown in the home
-// view header and the SKILL.md description).
-export const DESCRIPTION = "TODO: describe what onlyness-axi does";
+export const DESCRIPTION =
+  "Local-first workshop: Pepsi Paradox → onlyness statement → truthmode";
 
 export const SPEC_VERSION = "axi/1.0-2026-07";
 
@@ -21,21 +20,23 @@ export function collapseHome(path: string): string {
  * Shared body of the home view; `tool` is how commands are written
  * ("onlyness-axi" live, "npx -y onlyness-axi" in the static skill).
  *
- * TODO: replace the demo table with your tool's most decision-relevant
- * live content (AXI principle 8: content first, small token budget).
+ * Live session listing is handled in commands/home.ts; this static body
+ * is for SKILL.md discovery (AXI principle 7).
  */
 export function homeBody(tool: string): string {
   const table = emitList(
-    "items",
+    "commands",
     [
-      { id: 1, title: "Replace this demo with live content", status: "open" },
-      { id: 2, title: "Wire your first real command", status: "open" },
+      { command: `${tool} start`, summary: "Create session + open surface" },
+      { command: `${tool} poll <id>`, summary: "Long-poll human events" },
+      { command: `${tool} playbook <id>`, summary: "Fetch step guidance" },
     ],
-    ["id", "title", "status"],
+    ["command", "summary"],
   );
   const help = helpBlock([
-    `${tool} items list --status open`,
-    `${tool} items list --help`,
+    `${tool} start --entry blank`,
+    `${tool} list`,
+    `${tool} --help`,
   ]);
   return [table, help].join("\n");
 }
@@ -50,8 +51,15 @@ export function rootHelpText(): string {
   const commands = emitList(
     "commands",
     [
-      // TODO: keep this table in sync with the registry in src/index.ts.
-      { command: "items list", summary: "List demo items" },
+      { command: "list", summary: "List active workshop sessions" },
+      { command: "start", summary: "Create session, surface, and local server" },
+      { command: "poll", summary: "Long-poll human submit / need-coach events" },
+      { command: "reply", summary: "Post coach or system message to surface" },
+      { command: "advance", summary: "Move to next step when gate is ready" },
+      { command: "result", summary: "Emit worksheet + statement + truthmode" },
+      { command: "end", summary: "End session; close idle servers" },
+      { command: "playbook", summary: "On-demand step / coach / prune guidance" },
+      { command: "truthmode", summary: "Rubric check or store Pass 2 swap" },
     ],
     ["command", "summary"],
   );
@@ -67,9 +75,10 @@ export function rootHelpText(): string {
     `onlyness-axi: ${DESCRIPTION}`,
     commands,
     flags,
-    "examples[2]:",
-    "  onlyness-axi items list --status open",
-    "  onlyness-axi items list --fields id,title,status",
+    "examples[3]:",
+    "  onlyness-axi start --entry blank",
+    "  onlyness-axi poll s-…",
+    "  onlyness-axi playbook paradox",
   ].join("\n");
 }
 

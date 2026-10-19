@@ -2,6 +2,9 @@
 // runs it automatically via `npm test`).
 
 import { spawnSync } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -35,5 +38,18 @@ describe("onlyness-axi AXI contract", () => {
   it("stderr is silent on success (principle 6)", () => {
     const r = run();
     expect(r.stderr.trim()).toBe("");
+  });
+
+  it("start then list shows session", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "onlyness-cli-"));
+    const r = spawnSync("node", [bin, "start", "--entry", "blank"], {
+      encoding: "utf8",
+      cwd,
+      env: { ...process.env, ONLYNESS_NO_BROWSER: "1" },
+    });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/session:/);
+    const list = spawnSync("node", [bin], { encoding: "utf8", cwd });
+    expect(list.stdout).toMatch(/sessions\[/);
   });
 });
