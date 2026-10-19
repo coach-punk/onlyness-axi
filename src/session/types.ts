@@ -7,10 +7,20 @@ export type StepId =
   | "off_axis"
   | "onlyness"
   | "truthmode"
+  | "pitch"
   | "done";
 
 export type EntryKind = "blank" | "seed" | "prune";
 export type CoachJob = "clarify" | "ground" | "mirror";
+export type SessionStatus = "active" | "paused" | "ended";
+
+export interface PitchSatisfaction {
+  stand: boolean;
+  axis: boolean;
+  off_axis: boolean;
+  onlyness: boolean;
+  statement: boolean;
+}
 
 export interface Arena {
   industry: string;
@@ -55,7 +65,10 @@ export interface Session {
   truthmode: TruthmodeState | null;
   coachLog: CoachEntry[];
   coachBudget: { used: number; max: 3; lastJob: CoachJob | null };
-  status: "active" | "ended";
+  status: SessionStatus;
   weakAdvance?: boolean;
   port?: number;
+  /** ISO time when coach last offered a chill break (surface shows Accept once). */
+  chillOfferedAt?: string | null;
+  satisfaction: PitchSatisfaction;
 }

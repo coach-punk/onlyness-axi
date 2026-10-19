@@ -15,7 +15,7 @@ export const DESCRIPTION =
  * Keep this the discovery surface; playbook text lives in the CLI.
  */
 export const SKILL_DESCRIPTION =
-  "Use when positioning, USP stuckness, Pepsi Paradox framing, feature-creep prune, or drafting an onlyness statement. Gather mutual context first; run via npx -y onlyness-axi; fetch playbooks from the CLI; coach ≤3 turns/step (clarify → ground → mirror); never skip Act 0 or truthmode.";
+  "Use when positioning, USP stuckness, Pepsi Paradox framing, feature-creep prune, or drafting an onlyness statement. Gather mutual context first; run via npx -y onlyness-axi; fetch playbooks from the CLI; coach ≤3 turns/step (clarify → ground → mirror); offer chill (reply --offer-chill) only when hostile/stuck — no permanent escape hatch; pitch.html is the philosophy deliverable after satisfaction; never skip Act 0 or truthmode.";
 
 export const SPEC_VERSION = "axi/1.0-2026-07";
 
@@ -40,9 +40,12 @@ export function homeBody(tool: string): string {
       { command: `${tool} poll <id>`, summary: "Long-poll human events" },
       { command: `${tool} reply <id>`, summary: "Post coach message to surface" },
       { command: `${tool} advance <id>`, summary: "Move to next step when gated" },
-      { command: `${tool} playbook <id>`, summary: "Fetch step / coach / prune guidance" },
+      { command: `${tool} playbook <id>`, summary: "Fetch step / coach / prune / pitch guidance" },
       { command: `${tool} truthmode check <id>`, summary: "Run Pass 1 rubric" },
-      { command: `${tool} result <id>`, summary: "Worksheet + statement + truthmode" },
+      { command: `${tool} pitch <id>`, summary: "Generate reverse-walk pitch.html deliverable" },
+      { command: `${tool} chill <id>`, summary: "Pause workshop (after coach offers break)" },
+      { command: `${tool} resume <id>`, summary: "Unpause after chill" },
+      { command: `${tool} result <id>`, summary: "Worksheet + statement + truthmode + pitchUrl" },
       { command: `${tool} end <id>`, summary: "End session; close idle servers" },
       { command: `${tool} list`, summary: "List active workshop sessions" },
     ],
@@ -70,11 +73,14 @@ export function rootHelpText(): string {
       { command: "start", summary: "Create session, surface, and local server" },
       { command: "serve", summary: "Run long-lived HTTP surface + event bus" },
       { command: "poll", summary: "Long-poll human submit / need-coach events" },
-      { command: "reply", summary: "Post coach or system message to surface" },
+      { command: "reply", summary: "Post coach or system message (--offer-chill)" },
       { command: "advance", summary: "Move to next step when gate is ready" },
-      { command: "result", summary: "Emit worksheet + statement + truthmode" },
+      { command: "pitch", summary: "Generate reverse-walk pitch.html deliverable" },
+      { command: "chill", summary: "Pause workshop for a human break" },
+      { command: "resume", summary: "Unpause after chill" },
+      { command: "result", summary: "Emit worksheet + statement + truthmode + pitchUrl" },
       { command: "end", summary: "End session; close idle servers" },
-      { command: "playbook", summary: "On-demand step / coach / prune guidance" },
+      { command: "playbook", summary: "On-demand step / coach / pitch / prune guidance" },
       { command: "truthmode", summary: "Rubric check or store Pass 2 swap" },
     ],
     ["command", "summary"],
@@ -109,7 +115,7 @@ function skillRules(): string {
     "",
     "- Invoke with `npx -y onlyness-axi` (no global install).",
     "- Before `start` / during Act 0: gather **mutual context** (chat, memory tools if present, prior `.onlyness/` sessions, seed) and prefill arena / pick a fitting worked example.",
-    "- Fetch guidance on demand: `playbook <id>` (`paradox`, `arena`, `stand`, `axis`, `off-axis`, `onlyness`, `truthmode`, `prune`, `coach`). Do not paste stale playbooks into this skill.",
+    "- Fetch guidance on demand: `playbook <id>` (`paradox`, `arena`, `stand`, `axis`, `off-axis`, `onlyness`, `truthmode`, `pitch`, `prune`, `coach`). Do not paste stale playbooks into this skill.",
     "",
     "## Coach budget (per step)",
     "",
@@ -120,6 +126,14 @@ function skillRules(): string {
     "3. **Mirror** — adversarial “a rival could say the same…”",
     "",
     "Do not burn budget on generic lectures when arena is empty — fill arena first. Prefer send-back over pep talk on weak/fail truthmode.",
+    "",
+    "## Chill (agent-only)",
+    "",
+    "No permanent escape hatch. If the human is hostile, shame-spiraling, or forcing more turns will make it worse: **one** offer via `reply --system --offer-chill --text \"…\"` (no budget burn). Accept → `chill` / surface Accept break; later `resume`. Do not nag if declined.",
+    "",
+    "## Pitch deliverable",
+    "",
+    "After truthmode, land on `pitch` step. When they confirm satisfaction with stand/axis/off-axis/onlyness/statement, run `pitch <id>` and open `/pitch` — reverse walk 4→3→2→1 bookended by the statement. That page is the philosophy deliverable, not a tech stack.",
     "",
     "## Hard rules",
     "",

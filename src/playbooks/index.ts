@@ -6,6 +6,7 @@ export type PlaybookId =
   | "off-axis"
   | "onlyness"
   | "truthmode"
+  | "pitch"
   | "prune"
   | "coach";
 
@@ -17,6 +18,7 @@ export const PLAYBOOK_IDS: PlaybookId[] = [
   "off-axis",
   "onlyness",
   "truthmode",
+  "pitch",
   "prune",
   "coach",
 ];
@@ -197,6 +199,28 @@ Mid-lifecycle sharpening: use onlyness work to decide what to cut, not only what
 4. Prefer mutual context (prior sessions, seed) to spot feature creep.
 `;
 
+const pitchPb = `# Pitch deliverable
+
+## Purpose
+The human-facing deliverable is a **concrete philosophy** — reverse-walk elevator pitch — not specs or a tech stack.
+
+## What good looks like
+- Truthmode is pass (or weak they own).
+- Human confirms satisfaction with stand, axis, off-axis, onlyness, **and** the statement.
+- \`pitch.html\` opens on the statement, walks 4→3→2→1 contrasting Brad Pitts, lands on the statement again.
+
+## Common fails
+- Generating pitch before satisfaction checkboxes.
+- Treating pitch as a feature list or stack dump.
+- Skipping the reverse walk.
+
+## Agent instructions
+1. After truthmode, advance to \`pitch\` step; wait for satisfaction submit.
+2. Run \`onlyness-axi pitch <id>\` then open \`/pitch\` (serve must be up).
+3. Advance to \`done\` when they are happy with the pitch page.
+4. \`result\` includes \`pitchUrl\` when the file exists.
+`;
+
 const coach = `# Coach budget
 
 ## Purpose
@@ -211,16 +235,25 @@ Stubborn humans need nudges; infinite roasting loses them. Cap at 3 turns per st
 
 Then surface exits: examples, stuck/need-coach, or advance with weak flag. Budget resets on step advance or substantive answer change.
 
+## Chill (agent-only)
+There is **no** always-visible escape hatch. If the human is hostile, contemptuous, shame-spiraling, or clearly “not getting it” and forcing more turns will make it worse:
+1. Offer **one** chill break via \`reply --system --offer-chill --text "…"\` (does **not** burn coach budget).
+2. Do not nag if they decline; clear \`chillOffered\` by continuing work.
+3. If they accept (surface **Accept break**) or you run \`chill <id>\`, stop polling pressure — let them resume later with \`resume\`.
+4. Never invent a permanent “take a break” button on the workshop.
+
 ## Common fails
 - Burning turns on lectures while arena is empty.
 - Fourth roast after budget exhausted.
 - Using \`reply\` without \`--system\` for arena prefill / example swap (that should not burn budget).
+- Offering chill every turn (nagging).
 
 ## Agent instructions
-1. \`reply --text\` consumes budget unless \`--system\`.
+1. \`reply --text\` consumes budget unless \`--system\` or \`--offer-chill\`.
 2. After exhausted, stop coaching; suggest exits / \`advance\` when gate ready.
 3. Fetch step playbooks on demand; keep skill thin.
 4. Never skip Act 0 or truthmode.
+5. Prefer chill over another roast when attitude is the blocker.
 `;
 
 export const PLAYBOOKS: Record<PlaybookId, string> = {
@@ -231,6 +264,7 @@ export const PLAYBOOKS: Record<PlaybookId, string> = {
   "off-axis": offAxis,
   onlyness,
   truthmode: truthmodePb,
+  pitch: pitchPb,
   prune,
   coach,
 };

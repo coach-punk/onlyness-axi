@@ -3,6 +3,7 @@ import { AxiError } from "../output/errors.js";
 import { emitBlock, emitKV, print } from "../output/toon.js";
 import { advanceSession } from "../session/steps.js";
 import { saveSession } from "../session/store.js";
+import { generatePitch, pitchUrl } from "./pitch.js";
 import { requireSession, root, writeSurfaceFile } from "./session-io.js";
 
 export const advanceCommand: CommandModule = {
@@ -20,6 +21,15 @@ export const advanceCommand: CommandModule = {
     let session = requireSession(id);
     const rootDir = root();
 
+    if (session.status === "paused") {
+      throw new AxiError(
+        "session is paused",
+        `onlyness-axi resume ${id} before advancing`,
+      );
+    }
+
+    const fromStep = session.step;
+
     try {
       session = advanceSession(session);
     } catch (err) {
@@ -33,11 +43,25 @@ export const advanceCommand: CommandModule = {
     saveSession(rootDir, session);
     writeSurfaceFile(session);
 
+    let pitch = "";
+    if (fromStep === "pitch" && session.step === "done") {
+      try {
+        generatePitch(id);
+        session = requireSession(id);
+        pitch = pitchUrl(session.port);
+      } catch {
+        // Gate already passed; regenerate best-effort for deliverable.
+      }
+    }
+    if (session.step === "pitch") {
+      // Landing on pitch step: surface checklist; pitch file after satisfaction.
+    }
+
     const playbookId =
       session.step === "off_axis"
         ? "off-axis"
         : session.step === "done"
-          ? "truthmode"
+          ? "pitch"
           : session.step;
 
     print(
@@ -45,12 +69,17 @@ export const advanceCommand: CommandModule = {
         ["session", session.id],
         ["step", session.step],
         ["coachBudgetUsed", session.coachBudget.used],
+        ["pitchUrl", pitch],
       ]),
     );
     print(
       emitBlock("next", [
-        `1. onlyness-axi playbook ${playbookId}`,
-        `2. onlyness-axi poll ${session.id}`,
+        session.step === "pitch"
+          ? "1. Confirm satisfaction on surface, then onlyness-axi pitch " + id
+          : `1. onlyness-axi playbook ${playbookId}`,
+        pitch
+          ? `2. Open pitch ${pitch}`
+          : `2. onlyness-axi poll ${session.id}`,
       ]),
     );
     return 0;

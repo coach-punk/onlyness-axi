@@ -63,6 +63,8 @@ export function renderSurface(session: Session): string {
   const t = session.truthmode;
   const cutsValue = t?.cuts?.length ? t.cuts.join("\n") : "";
   const budgetExhausted = exhausted(session);
+  const chillOffered = Boolean(session.chillOfferedAt);
+  const sat = session.satisfaction;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -297,9 +299,24 @@ export function renderSurface(session: Session): string {
   </div>
 </section>
 
+<section id="sec-pitch" class="${show(step, "pitch")}">
+  <h2>Pitch deliverable</h2>
+  <p>When you’re fully satisfied with the work — not “good enough to quit” — confirm each piece. This unlocks your reverse-walk elevator pitch (philosophy, not a tech stack).</p>
+  ${session.statement ? `<p><span class="label">Statement</span> ${escapeHtml(session.statement)}</p>` : "<p class=\"muted\">No statement yet.</p>"}
+  <label><input type="checkbox" id="sat-stand" ${sat.stand ? "checked" : ""}/> Satisfied with Step 1 — stand</label>
+  <label><input type="checkbox" id="sat-axis" ${sat.axis ? "checked" : ""}/> Satisfied with Step 2 — axis of better</label>
+  <label><input type="checkbox" id="sat-off" ${sat.off_axis ? "checked" : ""}/> Satisfied with Step 3 — off-axis</label>
+  <label><input type="checkbox" id="sat-only" ${sat.onlyness ? "checked" : ""}/> Satisfied with Step 4 — onlyness draft</label>
+  <label><input type="checkbox" id="sat-stmt" ${sat.statement ? "checked" : ""}/> Satisfied with the onlyness statement</label>
+  <div class="actions">
+    <button type="button" id="btn-submit-satisfaction">Save satisfaction</button>
+  </div>
+  <p class="muted">Agent: run <code>onlyness-axi pitch</code> then <code>advance</code> to done. Open <code>/pitch</code> for the deliverable.</p>
+</section>
+
 <section id="sec-done" class="${show(step, "done")}">
   <h2>Done</h2>
-  <p>Workshop complete. Pull <code>result</code> from the CLI for the worksheet handoff.</p>
+  <p>Workshop complete. Your deliverable is the <a href="/pitch">pitch</a> — pull <code>result</code> from the CLI for the worksheet handoff.</p>
   ${session.statement ? `<p><span class="label">Statement</span> ${escapeHtml(session.statement)}</p>` : ""}
   ${truthmodeVerdictHtml(t)}
 </section>
@@ -312,6 +329,12 @@ export function renderSurface(session: Session): string {
     <p class="muted" id="coach-budget-aside">Budget ${session.coachBudget.used}/${session.coachBudget.max}${session.coachBudget.lastJob ? ` · last: ${escapeHtml(session.coachBudget.lastJob)}` : ""}</p>
     <div id="coach-log">
 ${coachEntriesHtml(session.coachLog)}
+    </div>
+    <div class="exits${chillOffered ? "" : " hidden"}" id="chill-offer">
+      <p class="muted">Coach offered a break — only accept if you need it:</p>
+      <div class="actions">
+        <button type="button" id="btn-accept-chill">Accept break</button>
+      </div>
     </div>
     <div class="exits${budgetExhausted ? "" : " hidden"}" id="exhausted-exits">
       <p class="muted">Coach budget exhausted. Calm exits:</p>
@@ -430,6 +453,23 @@ ${coachEntriesHtml(session.coachLog)}
       .then(function () { setStatus("Weak advance flagged."); })
       .catch(function (e) { setStatus(String(e.message || e)); });
   });
+  bind("btn-accept-chill", function () {
+    post("/api/chill", { reason: "accepted coach chill offer" })
+      .then(function () { window.location.href = "/"; })
+      .catch(function (e) { setStatus(String(e.message || e)); });
+  });
+  bind("btn-submit-satisfaction", function () {
+    post("/api/submit", {
+      satisfaction: {
+        stand: !!(document.getElementById("sat-stand") || {}).checked,
+        axis: !!(document.getElementById("sat-axis") || {}).checked,
+        off_axis: !!(document.getElementById("sat-off") || {}).checked,
+        onlyness: !!(document.getElementById("sat-only") || {}).checked,
+        statement: !!(document.getElementById("sat-stmt") || {}).checked,
+      },
+    }).then(function () { setStatus("Satisfaction saved — ask agent to run pitch."); })
+      .catch(function (e) { setStatus(String(e.message || e)); });
+  });
 
   function escapeText(s) {
     return String(s)
@@ -462,6 +502,7 @@ ${coachEntriesHtml(session.coachLog)}
     off_axis: "sec-off-axis",
     onlyness: "sec-onlyness",
     truthmode: "sec-truthmode",
+    pitch: "sec-pitch",
     done: "sec-done"
   };
   function syncStepSections(step) {
@@ -488,11 +529,20 @@ ${coachEntriesHtml(session.coachLog)}
     fetch("/api/session")
       .then(function (r) { return r.json(); })
       .then(function (s) {
+        if (s.status === "paused") {
+          window.location.href = "/";
+          return;
+        }
         renderCoachLog(s.coachLog || []);
         var exits = document.getElementById("exhausted-exits");
         if (exits && s.coachBudget) {
           if (s.coachBudget.used >= s.coachBudget.max) exits.classList.remove("hidden");
           else exits.classList.add("hidden");
+        }
+        var chill = document.getElementById("chill-offer");
+        if (chill) {
+          if (s.chillOfferedAt) chill.classList.remove("hidden");
+          else chill.classList.add("hidden");
         }
         var stepLabel = document.getElementById("step-label");
         if (stepLabel && s.step) stepLabel.textContent = s.step;

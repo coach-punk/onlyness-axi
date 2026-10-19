@@ -1,9 +1,11 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { pushEvent, waitForEvent, type HumanEvent, type HumanEventType } from "./events.js";
+import { pauseSession } from "../commands/chill.js";
+import { resumeSession } from "../commands/resume.js";
 import { applyHumanSubmit, type HumanSubmitPayload } from "../session/steps.js";
 import { loadSession, saveSession, sessionDir } from "../session/store.js";
+import { pushEvent, waitForEvent, type HumanEvent, type HumanEventType } from "./events.js";
 
 export type StartServerOpts = {
   rootDir: string;
@@ -75,13 +77,34 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
       const path = url.pathname;
 
       if (method === "GET" && path === "/") {
-        const surfacePath = join(dir, "surface.html");
-        if (!existsSync(surfacePath)) {
-          sendText(res, 404, "surface.html not found", "text/plain; charset=utf-8");
+        const session = loadSession(rootDir, sessionId);
+        const file =
+          session.status === "paused"
+            ? join(dir, "chill.html")
+            : join(dir, "surface.html");
+        if (!existsSync(file)) {
+          sendText(
+            res,
+            404,
+            session.status === "paused"
+              ? "chill.html not found"
+              : "surface.html not found",
+            "text/plain; charset=utf-8",
+          );
           return;
         }
-        const html = readFileSync(surfacePath, "utf8");
+        const html = readFileSync(file, "utf8");
         sendText(res, 200, html, "text/html; charset=utf-8");
+        return;
+      }
+
+      if (method === "GET" && path === "/pitch") {
+        const pitchPath = join(dir, "pitch.html");
+        if (!existsSync(pitchPath)) {
+          sendText(res, 404, "pitch.html not found", "text/plain; charset=utf-8");
+          return;
+        }
+        sendText(res, 200, readFileSync(pitchPath, "utf8"), "text/html; charset=utf-8");
         return;
       }
 
@@ -92,9 +115,16 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
       }
 
       if (method === "POST" && path === "/api/submit") {
+        let session = loadSession(rootDir, sessionId);
+        if (session.status === "paused") {
+          sendJson(res, 409, {
+            error: "session paused — resume before submitting",
+            hint: "POST /api/resume or onlyness-axi resume " + sessionId,
+          });
+          return;
+        }
         const body = parseJsonBody(await readBody(req));
         const payload = body as HumanSubmitPayload;
-        let session = loadSession(rootDir, sessionId);
         session = applyHumanSubmit(session, payload);
         saveSession(rootDir, session);
         pushEvent(sessionId, eventOf("submit", body));
@@ -103,6 +133,14 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
       }
 
       if (method === "POST" && path === "/api/need-coach") {
+        const session = loadSession(rootDir, sessionId);
+        if (session.status === "paused") {
+          sendJson(res, 409, {
+            error: "session paused — resume before coaching",
+            hint: "POST /api/resume or onlyness-axi resume " + sessionId,
+          });
+          return;
+        }
         const raw = await readBody(req);
         const body = raw.trim() ? parseJsonBody(raw) : {};
         pushEvent(sessionId, eventOf("need_coach", body));
@@ -112,10 +150,35 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
 
       if (method === "POST" && path === "/api/weak-advance") {
         let session = loadSession(rootDir, sessionId);
+        if (session.status === "paused") {
+          sendJson(res, 409, {
+            error: "session paused — resume first",
+            hint: "POST /api/resume or onlyness-axi resume " + sessionId,
+          });
+          return;
+        }
         session = applyHumanSubmit(session, { weakAdvance: true });
         saveSession(rootDir, session);
         pushEvent(sessionId, eventOf("weak_advance", { weakAdvance: true }));
         sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (method === "POST" && path === "/api/chill") {
+        const raw = await readBody(req);
+        const body = raw.trim() ? parseJsonBody(raw) : {};
+        const reason =
+          typeof body["reason"] === "string" ? body["reason"] : undefined;
+        const session = pauseSession(rootDir, sessionId, reason);
+        pushEvent(sessionId, eventOf("submit", { chill: true, reason: reason ?? "" }));
+        sendJson(res, 200, { ok: true, status: session.status });
+        return;
+      }
+
+      if (method === "POST" && path === "/api/resume") {
+        const session = resumeSession(rootDir, sessionId);
+        pushEvent(sessionId, eventOf("submit", { resume: true }));
+        sendJson(res, 200, { ok: true, status: session.status });
         return;
       }
 

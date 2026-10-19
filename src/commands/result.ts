@@ -1,5 +1,6 @@
 import type { CommandModule } from "../cli/router.js";
 import { emitBlock, emitKV, emitList, print } from "../output/toon.js";
+import { pitchFileExists, pitchUrl } from "./pitch.js";
 import { requireSession } from "./session-io.js";
 
 export const resultCommand: CommandModule = {
@@ -15,6 +16,8 @@ export const resultCommand: CommandModule = {
   run(parsed) {
     const session = requireSession(parsed.positionals[0]);
     const t = session.truthmode;
+    const hasPitch = pitchFileExists(session.id);
+    const url = hasPitch ? pitchUrl(session.port) : "";
 
     print(
       emitKV([
@@ -31,6 +34,7 @@ export const resultCommand: CommandModule = {
         ["itch", t?.itch ?? ""],
         ["sticky", t?.sticky ?? ""],
         ["jackBlack", t?.jackBlack ?? ""],
+        ["pitchUrl", url],
       ]),
     );
 

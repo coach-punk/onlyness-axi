@@ -45,6 +45,7 @@ export const playbookCommand: CommandModule = {
       case "off-axis":
       case "onlyness":
       case "truthmode":
+      case "pitch":
       case "prune":
       case "coach":
         break;

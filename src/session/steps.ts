@@ -1,5 +1,11 @@
 import { resetBudgetIfAnswerChanged } from "./coach.js";
-import type { Arena, Session, StepId, TruthmodeState } from "./types.js";
+import type {
+  Arena,
+  PitchSatisfaction,
+  Session,
+  StepId,
+  TruthmodeState,
+} from "./types.js";
 
 export type HumanSubmitPayload = {
   paradoxAck?: boolean;
@@ -8,6 +14,7 @@ export type HumanSubmitPayload = {
   statement?: string;
   truthmode?: Partial<TruthmodeState>;
   weakAdvance?: boolean;
+  satisfaction?: Partial<PitchSatisfaction>;
 };
 
 function emptyTruthmode(): TruthmodeState {
@@ -35,8 +42,13 @@ export const STEP_ORDER: StepId[] = [
   "off_axis",
   "onlyness",
   "truthmode",
+  "pitch",
   "done",
 ];
+
+export function satisfactionComplete(s: PitchSatisfaction): boolean {
+  return s.stand && s.axis && s.off_axis && s.onlyness && s.statement;
+}
 
 export function nextStep(step: StepId): StepId {
   const i = STEP_ORDER.indexOf(step);
@@ -90,6 +102,18 @@ export function stepAnswerBlob(session: Session): string {
       if (!t) return "";
       return [t.itch, t.sticky, t.jackBlack, t.cuts.join("\n")].join("\n");
     }
+    case "pitch": {
+      const s = session.satisfaction;
+      return [
+        s.stand,
+        s.axis,
+        s.off_axis,
+        s.onlyness,
+        s.statement,
+      ]
+        .map((v) => (v ? "1" : "0"))
+        .join("");
+    }
     case "done":
       return "";
     default: {
@@ -100,8 +124,13 @@ export function stepAnswerBlob(session: Session): string {
 }
 
 export function canAdvance(session: Session): { ok: boolean; reason?: string } {
-  // Calm exit after coach budget exhaust: weakAdvance unlocks incomplete steps.
-  if (session.weakAdvance && session.step !== "done") {
+  // Calm exit after coach budget exhaust: weakAdvance unlocks incomplete steps
+  // (not pitch — pitch requires explicit satisfaction).
+  if (
+    session.weakAdvance &&
+    session.step !== "done" &&
+    session.step !== "pitch"
+  ) {
     return { ok: true };
   }
   switch (session.step) {
@@ -150,6 +179,25 @@ export function canAdvance(session: Session): { ok: boolean; reason?: string } {
       }
       return { ok: true };
     }
+    case "pitch": {
+      if (!nonEmpty(session.statement)) {
+        return { ok: false, reason: "need an onlyness statement" };
+      }
+      const t = session.truthmode;
+      if (!t || t.verdict === null) {
+        return { ok: false, reason: "run truthmode first" };
+      }
+      if (t.verdict === "fail") {
+        return { ok: false, reason: "truthmode failed — revise before pitch" };
+      }
+      if (!satisfactionComplete(session.satisfaction)) {
+        return {
+          ok: false,
+          reason: "confirm satisfaction with stand, axis, off-axis, onlyness, and statement",
+        };
+      }
+      return { ok: true };
+    }
     case "done":
       return { ok: false, reason: "session already done" };
     default: {
@@ -173,6 +221,11 @@ export function applyHumanSubmit(
         }
       : session.truthmode;
 
+  const satisfaction =
+    payload.satisfaction !== undefined
+      ? { ...session.satisfaction, ...payload.satisfaction }
+      : session.satisfaction;
+
   let next: Session = {
     ...session,
     ...(payload.paradoxAck === true ? { paradoxAck: true } : {}),
@@ -187,6 +240,7 @@ export function applyHumanSubmit(
       : {}),
     ...(payload.truthmode !== undefined ? { truthmode } : {}),
     ...(payload.weakAdvance === true ? { weakAdvance: true } : {}),
+    ...(payload.satisfaction !== undefined ? { satisfaction } : {}),
     coachLog: [
       ...session.coachLog,
       {

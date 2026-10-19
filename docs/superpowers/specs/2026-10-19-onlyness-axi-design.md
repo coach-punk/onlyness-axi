@@ -209,6 +209,14 @@ Optional `seed.md` when started with seed material.
 
 Follow axi/1.0 principles: TOON output, minimal defaults, truncation with `--full`, pre-computed status, definitive empty states, structured errors/exit codes, ambient skill discovery, content-first bare invoke, contextual `next[]`, consistent `--help`. Scaffold and validate with `axi-axi` during implementation.
 
+## Chill break (agent-only)
+
+There is **no** always-visible escape hatch. When the human is hostile, shame-spiraling, or forcing more turns will make it worse, the agent offers **one** chill via `reply --system --offer-chill` (does not burn coach budget). Accept → `chill` / surface Accept break → `status: paused` + `chill.html`. Later `resume` restores the workshop. Do not nag if declined.
+
+## Pitch deliverable
+
+After truthmode, step `pitch` collects satisfaction with stand, axis, off-axis, onlyness, and the statement. Then `pitch.html` is the human deliverable: open on the onlyness statement, reverse walk 4→3→2→1 contrasting what Brad Pitts do, land on the statement again — **philosophy, not a tech stack**. Served at `GET /pitch`. `result` includes `pitchUrl` when present.
+
 ## Success criteria
 
 - Agent can run a full blank session end-to-end via CLI alone
@@ -219,6 +227,8 @@ Follow axi/1.0 principles: TOON output, minimal defaults, truncation with `--ful
 - Truthmode rejects the “only used-car salesman on this curb” class of statements
 - Adversarial swap visibly wakes the human when the claim is generic
 - `result` is enough for a downstream agent to write pitch copy without re-asking the four steps
+- Chill is coach-offered only; paused sessions block submit until resume
+- Pitch unlocks only after satisfaction; reverse walk is bookended by the statement
 
 ## Open implementation details (plan phase)
 

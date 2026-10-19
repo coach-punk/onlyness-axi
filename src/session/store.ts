@@ -1,7 +1,17 @@
 // src/session/store.ts
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { EntryKind, Session } from "./types.js";
+import type { EntryKind, PitchSatisfaction, Session } from "./types.js";
+
+export function emptySatisfaction(): PitchSatisfaction {
+  return {
+    stand: false,
+    axis: false,
+    off_axis: false,
+    onlyness: false,
+    statement: false,
+  };
+}
 
 const ROOT_NAME = ".onlyness";
 
@@ -38,6 +48,8 @@ export function createSession(opts: {
     coachLog: [],
     coachBudget: { used: 0, max: 3, lastJob: null },
     status: "active",
+    chillOfferedAt: null,
+    satisfaction: emptySatisfaction(),
   };
 }
 
@@ -52,7 +64,12 @@ export function loadSession(rootDir: string, id: string): Session {
   if (!existsSync(path)) {
     throw new Error(`session not found: ${id}`);
   }
-  return JSON.parse(readFileSync(path, "utf8")) as Session;
+  const raw = JSON.parse(readFileSync(path, "utf8")) as Session;
+  return {
+    ...raw,
+    chillOfferedAt: raw.chillOfferedAt ?? null,
+    satisfaction: raw.satisfaction ?? emptySatisfaction(),
+  };
 }
 
 export function listSessions(rootDir: string): Session[] {
