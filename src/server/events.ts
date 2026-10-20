@@ -57,8 +57,9 @@ export function appendEvent(
   let nextSeq = 1;
   if (existsSync(filePath)) {
     const existing = readEventsSince(rootDir, sessionId, 0);
-    if (existing.length > 0) {
-      nextSeq = existing[existing.length - 1].seq + 1;
+    const last = existing[existing.length - 1];
+    if (last) {
+      nextSeq = last.seq + 1;
     }
   }
 
@@ -85,17 +86,19 @@ export function tailEvents(
 ): Promise<HumanEvent | null> {
   // Check immediately
   const existing = readEventsSince(rootDir, sessionId, sinceSeq);
-  if (existing.length > 0) {
-    return Promise.resolve(existing[0]);
+  const firstExisting = existing[0];
+  if (firstExisting) {
+    return Promise.resolve(firstExisting);
   }
 
   return new Promise((resolve) => {
     const startTime = Date.now();
     const interval = setInterval(() => {
       const events = readEventsSince(rootDir, sessionId, sinceSeq);
-      if (events.length > 0) {
+      const firstEvent = events[0];
+      if (firstEvent) {
         clearInterval(interval);
-        resolve(events[0]);
+        resolve(firstEvent);
         return;
       }
       if (Date.now() - startTime >= timeoutMs) {
