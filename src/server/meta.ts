@@ -5,6 +5,8 @@ import { sessionDir } from "../session/store.js";
 export type ServerMeta = {
   pid: number;
   port: number;
+  token?: string;
+  startedAt?: string;
 };
 
 export function serverMetaPath(rootDir: string, sessionId: string): string {

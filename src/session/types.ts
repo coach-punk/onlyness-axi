@@ -68,6 +68,8 @@ export interface Session {
   status: SessionStatus;
   weakAdvance?: boolean;
   port?: number;
+  authToken: string;
+  version: number;
   /** ISO time when coach last offered a chill break (surface shows Accept once). */
   chillOfferedAt?: string | null;
   satisfaction: PitchSatisfaction;

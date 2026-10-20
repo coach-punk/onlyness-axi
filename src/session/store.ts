@@ -1,5 +1,5 @@
-// src/session/store.ts
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import type { EntryKind, PitchSatisfaction, Session } from "./types.js";
 
@@ -29,10 +29,15 @@ function slug(): string {
   return `s-${t}-${r}`;
 }
 
+export function randomToken(): string {
+  return randomBytes(16).toString("hex");
+}
+
 export function createSession(opts: {
   entry?: EntryKind;
   contextSources?: string[];
   seedText?: string;
+  authToken?: string;
 }): Session {
   return {
     id: slug(),
@@ -48,15 +53,32 @@ export function createSession(opts: {
     coachLog: [],
     coachBudget: { used: 0, max: 3, lastJob: null },
     status: "active",
+    authToken: opts.authToken ?? randomToken(),
+    version: 1,
     chillOfferedAt: null,
     satisfaction: emptySatisfaction(),
   };
 }
 
-export function saveSession(rootDir: string, session: Session): void {
+export function saveSessionAtomic(rootDir: string, session: Session): void {
   const dir = sessionDir(rootDir, session.id);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "session.json"), JSON.stringify(session, null, 2));
+  const targetPath = join(dir, "session.json");
+  if (existsSync(targetPath)) {
+    session.version = (session.version ?? 0) + 1;
+  } else {
+    session.version = session.version ?? 1;
+  }
+  const tempPath = join(
+    dir,
+    `session.json.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`,
+  );
+  writeFileSync(tempPath, JSON.stringify(session, null, 2), "utf8");
+  renameSync(tempPath, targetPath);
+}
+
+export function saveSession(rootDir: string, session: Session): void {
+  saveSessionAtomic(rootDir, session);
 }
 
 export function loadSession(rootDir: string, id: string): Session {
@@ -67,6 +89,8 @@ export function loadSession(rootDir: string, id: string): Session {
   const raw = JSON.parse(readFileSync(path, "utf8")) as Session;
   return {
     ...raw,
+    authToken: raw.authToken ?? slug(),
+    version: raw.version ?? 1,
     chillOfferedAt: raw.chillOfferedAt ?? null,
     satisfaction: raw.satisfaction ?? emptySatisfaction(),
   };

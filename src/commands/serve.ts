@@ -43,6 +43,8 @@ export const serveCommand: CommandModule = {
     writeServerMeta(rootDir, session.id, {
       pid: process.pid,
       port: server.port,
+      token: server.token,
+      startedAt: new Date().toISOString(),
     });
 
     session = loadSession(rootDir, session.id);

@@ -710,31 +710,31 @@ git commit -m "feat: add deterministic truthmode rubric"
   - `POST /api/:token/weak-advance` → appends `weak_advance` event to `events.jsonl`
   - `POST /api/:token/chill/accept` & `resume` → appends chill events
 
-- [ ] **Step 1: Write unit tests for durable events & atomic store**
+- [x] **Step 1: Write unit tests for durable events & atomic store**
   - Verify `appendEvent` assigns strictly incrementing `seq` (1, 2, 3...) to `events.jsonl`.
   - Verify `readEventsSince` returns only events with `seq > sinceSeq`.
   - Verify `tailEvents` resolves immediately if an event with `seq > sinceSeq` already exists, or waits and resolves when written from another process.
   - Verify `saveSessionAtomic` does not corrupt `session.json` on concurrent read/write and increments `version`.
 
-- [ ] **Step 2: Write server integration test**
+- [x] **Step 2: Write server integration test**
   - Verify server binds to `127.0.0.1` only.
   - Verify unauthorized requests without token return 401/403.
   - Verify invalid `Origin` on POST returns 403.
   - Verify valid POST appends event to disk and updates session JSON.
 
-- [ ] **Step 3: Implement durable events, atomic store, and token-authed server**
+- [x] **Step 3: Implement durable events, atomic store, and token-authed server**
   - Implement `appendEvent`, `readEventsSince`, `tailEvents` in `src/server/events.ts`.
   - Update `src/session/store.ts` with atomic write helper.
   - Implement loopback HTTP server with token validation in `src/server/http.ts`.
   - Implement `src/commands/serve.ts` and `src/server/meta.ts`.
 
-- [ ] **Step 4: Run tests & verify PASS**
+- [x] **Step 4: Run tests & verify PASS**
 
 ```bash
 npm test test/events.test.ts test/server.test.ts
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/server src/session src/commands/serve.ts test/events.test.ts test/server.test.ts

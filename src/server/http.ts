@@ -5,16 +5,18 @@ import { pauseSession } from "../commands/chill.js";
 import { resumeSession } from "../commands/resume.js";
 import { applyHumanSubmit, type HumanSubmitPayload } from "../session/steps.js";
 import { loadSession, saveSession, sessionDir } from "../session/store.js";
-import { pushEvent, waitForEvent, type HumanEvent, type HumanEventType } from "./events.js";
+import { appendEvent, tailEvents } from "./events.js";
 
 export type StartServerOpts = {
   rootDir: string;
   sessionId: string;
   port?: number;
+  token?: string;
 };
 
 export type StartedServer = {
   port: number;
+  token: string;
   close: () => Promise<void>;
 };
 
@@ -58,25 +60,83 @@ function parseJsonBody(raw: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
-function eventOf(
-  type: HumanEventType,
-  payload: Record<string, unknown>,
-): HumanEvent {
-  return { type, at: new Date().toISOString(), payload };
-}
-
 export async function startServer(opts: StartServerOpts): Promise<StartedServer> {
   const { rootDir, sessionId } = opts;
   const listenPort = opts.port ?? 0;
   const dir = sessionDir(rootDir, sessionId);
+  const initialSession = loadSession(rootDir, sessionId);
+  const token = opts.token ?? initialSession.authToken;
 
   const server = createServer(async (req, res) => {
     try {
-      const url = new URL(req.url ?? "/", `http://127.0.0.1`);
+      const url = new URL(req.url ?? "/", "http://127.0.0.1");
       const method = req.method ?? "GET";
-      const path = url.pathname;
+      const pathname = url.pathname;
 
-      if (method === "GET" && path === "/") {
+      // Extract token from path, header, or query
+      let reqToken: string | null = null;
+      let effectivePath = pathname;
+
+      // Path token patterns: /s/:token or /s/:token/...
+      if (pathname.startsWith("/s/")) {
+        const parts = pathname.slice(3).split("/");
+        reqToken = parts[0] || null;
+        effectivePath = "/" + parts.slice(1).join("/");
+        if (effectivePath === "/index.html") effectivePath = "/";
+      } else if (pathname.startsWith("/api/")) {
+        const parts = pathname.slice(5).split("/");
+        // Check if first segment is token or action
+        if (parts.length >= 2 && parts[0] === token) {
+          reqToken = parts[0];
+          effectivePath = "/api/" + parts.slice(1).join("/");
+        } else {
+          effectivePath = pathname;
+        }
+      }
+
+      // Check header or query if not in path
+      if (!reqToken) {
+        const authHeader = req.headers["authorization"];
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+          reqToken = authHeader.slice(7).trim();
+        } else if (typeof req.headers["x-onlyness-token"] === "string") {
+          reqToken = req.headers["x-onlyness-token"].trim();
+        } else if (url.searchParams.has("token")) {
+          reqToken = url.searchParams.get("token");
+        }
+      }
+
+      // Origin check for state-changing POST requests
+      if (method === "POST") {
+        const originHeader = req.headers["origin"];
+        if (typeof originHeader === "string" && originHeader.trim() !== "") {
+          try {
+            const originUrl = new URL(originHeader);
+            const host = originUrl.hostname;
+            if (host !== "127.0.0.1" && host !== "localhost") {
+              sendJson(res, 403, { error: "forbidden origin" });
+              return;
+            }
+          } catch {
+            sendJson(res, 403, { error: "invalid origin header" });
+            return;
+          }
+        }
+      }
+
+      // Surface HTML serving (/s/:token/ or /)
+      if (method === "GET" && (pathname.startsWith("/s/") || pathname === "/")) {
+        // Enforce token if path was /s/ or if token is required
+        if (pathname.startsWith("/s/") && reqToken !== token) {
+          sendText(res, 403, "invalid session token", "text/plain; charset=utf-8");
+          return;
+        }
+        if (pathname === "/" && reqToken !== token && token) {
+          // If accessing root directly without token, check if token provided
+          sendText(res, 403, "token required: access via /s/<token>/", "text/plain; charset=utf-8");
+          return;
+        }
+
         const session = loadSession(rootDir, sessionId);
         const file =
           session.status === "paused"
@@ -98,7 +158,12 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
         return;
       }
 
-      if (method === "GET" && path === "/pitch") {
+      // Pitch deliverable
+      if (method === "GET" && (effectivePath === "/pitch" || pathname === "/pitch")) {
+        if (reqToken !== token && token) {
+          sendText(res, 403, "forbidden", "text/plain; charset=utf-8");
+          return;
+        }
         const pitchPath = join(dir, "pitch.html");
         if (!existsSync(pitchPath)) {
           sendText(res, 404, "pitch.html not found", "text/plain; charset=utf-8");
@@ -108,13 +173,23 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
         return;
       }
 
-      if (method === "GET" && path === "/api/session") {
+      // API token authorization
+      if (effectivePath.startsWith("/api/")) {
+        if (token && reqToken !== token) {
+          sendJson(res, 401, { error: "unauthorized: valid session token required" });
+          return;
+        }
+      }
+
+      // GET /api/session
+      if (method === "GET" && effectivePath === "/api/session") {
         const session = loadSession(rootDir, sessionId);
         sendJson(res, 200, session);
         return;
       }
 
-      if (method === "POST" && path === "/api/submit") {
+      // POST /api/submit
+      if (method === "POST" && effectivePath === "/api/submit") {
         let session = loadSession(rootDir, sessionId);
         if (session.status === "paused") {
           sendJson(res, 409, {
@@ -127,12 +202,13 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
         const payload = body as HumanSubmitPayload;
         session = applyHumanSubmit(session, payload);
         saveSession(rootDir, session);
-        pushEvent(sessionId, eventOf("submit", body));
-        sendJson(res, 200, { ok: true });
+        const event = appendEvent(rootDir, sessionId, "submit", body);
+        sendJson(res, 200, { ok: true, seq: event.seq });
         return;
       }
 
-      if (method === "POST" && path === "/api/need-coach") {
+      // POST /api/need-coach
+      if (method === "POST" && effectivePath === "/api/need-coach") {
         const session = loadSession(rootDir, sessionId);
         if (session.status === "paused") {
           sendJson(res, 409, {
@@ -143,12 +219,13 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
         }
         const raw = await readBody(req);
         const body = raw.trim() ? parseJsonBody(raw) : {};
-        pushEvent(sessionId, eventOf("need_coach", body));
-        sendJson(res, 200, { ok: true });
+        const event = appendEvent(rootDir, sessionId, "need_coach", body);
+        sendJson(res, 200, { ok: true, seq: event.seq });
         return;
       }
 
-      if (method === "POST" && path === "/api/weak-advance") {
+      // POST /api/weak-advance
+      if (method === "POST" && effectivePath === "/api/weak-advance") {
         let session = loadSession(rootDir, sessionId);
         if (session.status === "paused") {
           sendJson(res, 409, {
@@ -159,41 +236,47 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
         }
         session = applyHumanSubmit(session, { weakAdvance: true });
         saveSession(rootDir, session);
-        pushEvent(sessionId, eventOf("weak_advance", { weakAdvance: true }));
-        sendJson(res, 200, { ok: true });
+        const event = appendEvent(rootDir, sessionId, "weak_advance", { weakAdvance: true });
+        sendJson(res, 200, { ok: true, seq: event.seq });
         return;
       }
 
-      if (method === "POST" && path === "/api/chill") {
+      // POST /api/chill (or /api/chill/accept)
+      if (method === "POST" && (effectivePath === "/api/chill" || effectivePath === "/api/chill/accept")) {
         const raw = await readBody(req);
         const body = raw.trim() ? parseJsonBody(raw) : {};
         const reason =
           typeof body["reason"] === "string" ? body["reason"] : undefined;
         const session = pauseSession(rootDir, sessionId, reason);
-        pushEvent(sessionId, eventOf("submit", { chill: true, reason: reason ?? "" }));
-        sendJson(res, 200, { ok: true, status: session.status });
+        const event = appendEvent(rootDir, sessionId, "chill_accept", { chill: true, reason: reason ?? "" });
+        sendJson(res, 200, { ok: true, status: session.status, seq: event.seq });
         return;
       }
 
-      if (method === "POST" && path === "/api/resume") {
+      // POST /api/resume (or /api/chill/resume)
+      if (method === "POST" && (effectivePath === "/api/resume" || effectivePath === "/api/chill/resume")) {
         const session = resumeSession(rootDir, sessionId);
-        pushEvent(sessionId, eventOf("submit", { resume: true }));
-        sendJson(res, 200, { ok: true, status: session.status });
+        const event = appendEvent(rootDir, sessionId, "chill_resume", { resume: true });
+        sendJson(res, 200, { ok: true, status: session.status, seq: event.seq });
         return;
       }
 
-      if (method === "GET" && path === "/api/events") {
+      // GET /api/events (polling endpoint)
+      if (method === "GET" && effectivePath === "/api/events") {
+        const sinceParam = url.searchParams.get("since") ?? url.searchParams.get("sinceSeq");
+        const sinceSeq = sinceParam !== null ? Number(sinceParam) : 0;
         const timeoutRaw = url.searchParams.get("timeoutMs");
-        const parsed = timeoutRaw !== null ? Number(timeoutRaw) : 60_000;
+        const parsedTimeout = timeoutRaw !== null ? Number(timeoutRaw) : 25_000;
         const timeoutMs =
-          Number.isFinite(parsed) && parsed >= 0 ? parsed : 60_000;
-        const event = await waitForEvent(sessionId, timeoutMs);
+          Number.isFinite(parsedTimeout) && parsedTimeout >= 0 ? parsedTimeout : 25_000;
+
+        const event = await tailEvents(rootDir, sessionId, sinceSeq, timeoutMs);
         sendJson(res, 200, { event });
         return;
       }
 
-      if (method === "GET" && path === "/api/poll") {
-        // Optional long-poll for browser; agents use GET /api/events.
+      // GET /api/poll
+      if (method === "GET" && effectivePath === "/api/poll") {
         sendJson(res, 200, { events: [] });
         return;
       }
@@ -217,6 +300,7 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
 
   return {
     port: addr.port,
+    token,
     close: () =>
       new Promise((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()));
