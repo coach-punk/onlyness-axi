@@ -1,8 +1,9 @@
 {
   "name": "onlyness-axi",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Local-first AXI workshop: Pepsi Paradox → onlyness statement → truthmode.",
   "type": "module",
+  "license": "MIT",
   "bin": {
     "onlyness-axi": "bin/onlyness-axi.js"
   },

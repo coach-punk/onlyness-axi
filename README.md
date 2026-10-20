@@ -60,3 +60,22 @@ Playbook ids: `paradox`, `arena`, `stand`, `axis`, `off-axis`, `onlyness`, `trut
 ```
 
 All output is TOON on stdout. Exit codes: `0` success/no-op, `1` error, `2` usage error.
+
+## Background & Attribution
+
+The core framework in this workshop is based on the **Onlyness Statement** developed by **Marty Neumeier** in his book [*Zag: The Number One Strategy of High-Performance Brands*](https://www.martyneumeier.com/zag) (2006).
+
+Neumeier's core thesis is that in saturated markets, being *better* on an established axis is a losing game (the Pepsi Paradox). Instead, high-performance brands "zag" when competitors "zig": they define a new, uncontested space by discovering and owning their radical differentiation.
+
+The fundamental test is Neumeier's onlyness formula:
+> **"Our brand is the ONLY ______ that ______."**
+> 
+> - **Part 1 (The Category / What):** What arena or paradigm you operate in.
+> - **Part 2 (The Differentiator / How & Why):** The singular value, capability, or belief that no competitor can legitimately claim without sounding ridiculous.
+
+`onlyness-axi` translates this concept into a local-first interactive workshop and AI agent protocol (AXI spec `axi/1.0-2026-07`), adding deterministic rubric testing (Truthmode Pass 1), adversarial rival claims (Pass 2), and mid-lifecycle pruning.
+
+## License
+
+[MIT](LICENSE) © 2026 John Stansbury
+
