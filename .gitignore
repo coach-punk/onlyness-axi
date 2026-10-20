@@ -1,5 +1,6 @@
 .worktrees/
 .onlyness/
+.cursor/
 node_modules/
 dist/
 .DS_Store

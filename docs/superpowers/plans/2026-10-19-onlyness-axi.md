@@ -36,12 +36,16 @@
 | `src/session/steps.ts` | Step order, advance gates, answer shape |
 | `src/session/coach.ts` | Budget consume/reset |
 | `src/truthmode/rubric.ts` | Deterministic Pass 1 checks |
-| `src/server/events.ts` | In-memory event queue per session |
-| `src/server/http.ts` | Serve surface + API + long-poll |
-| `src/surface/template.ts` | HTML workshop string (paradox→truthmode) |
+| `src/server/events.ts` | Durable event log append/tail/since (`.onlyness/<id>/events.jsonl`) |
+| `src/server/http.ts` | Loopback server with token auth, Origin check, static surface & API |
+| `src/server/meta.ts` | Server PID, port, token metadata for lifecycle management |
+| `src/surface/template.ts` | Static client shell HTML/JS (paradox→truthmode + localStorage drafts) |
 | `src/commands/home.ts` | List sessions (content-first) |
-| `src/commands/start.ts` | Create session, write surface, open browser, start server |
-| `src/commands/poll.ts` | Long-poll human events |
+| `src/commands/start.ts` | Create session, token, spawn serve, print prominent URL |
+| `src/commands/serve.ts` | Standalone server daemon process for session |
+| `src/commands/poll.ts` | Durable file-tailing poll + timeout + prompt fencing + dead-server recovery |
+| `src/commands/submit.ts` | Chat-only headless submission command |
+| `src/commands/init.ts` | Write AGENTS.md discovery instructions for Copilot/Cursor |
 | `src/commands/reply.ts` | Append coach message to session + push to surface |
 | `src/commands/advance.ts` | Gate check + step transition |
 | `src/commands/result.ts` | Emit full worksheet TOON |
@@ -50,7 +54,7 @@
 | `src/commands/truthmode.ts` | Rubric check + store swap / pass3 fields |
 | `src/playbooks/*.ts` | Paradox, arena, stand, axis, off-axis, onlyness, truthmode, prune, coach |
 | `src/skill/content.ts` | Thin skill + home render |
-| `test/*.test.ts` | Unit + CLI smoke tests |
+| `test/*.test.ts` | Unit + CLI smoke + dumb-driver cross-process tests |
 | `skills/onlyness/SKILL.md` | Generated via `npm run skill:gen` |
 
 Delete scaffold `src/commands/items.ts` after real commands exist.
@@ -663,229 +667,243 @@ git commit -m "feat: add deterministic truthmode rubric"
 
 ---
 
-### Task 6: Event bus + HTTP server
+### Task 6: Durable Event Log, Atomic Store & Token-Authed HTTP Server
+
+**Portability fixes addressed:**
+- *The Blocker*: `events.ts` module state eliminated; events are appended to `.onlyness/<id>/events.jsonl` with an incrementing `seq`. `poll --since <seq>` directly tails this file.
+- *Gap 4*: Atomic writes for `session.json` via temp file + rename plus `version` field.
+- *Gap 5*: Server binds strictly to loopback (`127.0.0.1`), generates a cryptographically random session token in the URL (`/s/:token/`), and validates `Origin` headers on state-changing requests.
+- *Self-healing daemon*: Standalone `serve <sessionId>` daemon command and process metadata. If the server dies or sandboxes kill background processes, `poll` automatically relaunches it.
 
 **Files:**
-- Create: `src/server/events.ts`
-- Create: `src/server/http.ts`
+- Create: `src/server/events.ts` (durable event append, tailing, and reading from `events.jsonl`)
+- Create: `src/server/http.ts` (loopback-only HTTP server, token authentication, Origin checking, static surface serving, API endpoints)
+- Create: `src/server/meta.ts` (`meta.json` storage: port, token, pid, process health)
+- Create: `src/commands/serve.ts` (standalone server command for background daemonization)
+- Modify: `src/session/store.ts` (atomic writes with tempfile rename and monotonic versioning)
+- Modify: `src/session/types.ts` (add `version`, `authToken`, `port`)
 - Create: `test/server.test.ts`
+- Create: `test/events.test.ts`
 
 **Interfaces:**
-- Produces:
-  - `type HumanEvent = { type: "submit" | "need_coach" | "weak_advance"; at: string; payload: Record<string, unknown> }`
-  - `pushEvent(sessionId, event)`, `waitForEvent(sessionId, timeoutMs): Promise<HumanEvent | null>`
-  - `startServer(opts: { rootDir: string; sessionId: string; port?: number }): Promise<{ port: number; close: () => Promise<void> }>`
-  - Routes:
-    - `GET /` → `surface.html`
-    - `GET /api/session` → session JSON
-    - `POST /api/submit` body JSON → merge into session via helper, push `submit` event
-    - `POST /api/need-coach` → push `need_coach`
-    - `POST /api/weak-advance` → set weakAdvance, push event
-    - `GET /api/poll?since=` → long-poll coach replies (optional for browser); CLI uses in-process `waitForEvent`
+- Event schema (`events.jsonl`):
+  ```ts
+  export type HumanEventType = "submit" | "need_coach" | "weak_advance" | "chill_accept" | "chill_resume";
+  export type HumanEvent = {
+    seq: number;
+    type: HumanEventType;
+    at: string;
+    payload: Record<string, unknown>;
+  };
+  ```
+- Functions:
+  - `appendEvent(rootDir: string, sessionId: string, type: HumanEventType, payload: Record<string, unknown>): Promise<HumanEvent>`
+  - `readEventsSince(rootDir: string, sessionId: string, sinceSeq: number): HumanEvent[]`
+  - `tailEvents(rootDir: string, sessionId: string, sinceSeq: number, timeoutMs: number): Promise<HumanEvent | null>`
+  - `saveSessionAtomic(rootDir: string, session: Session): void` (writes to `session.json.tmp.<pid>`, flushes, then atomic `renameSync`)
+  - `startServer(opts: { rootDir: string; sessionId: string; port?: number; token: string }): Promise<{ port: number; token: string; close: () => Promise<void> }>`
+- Routes:
+  - `GET /s/:token/` → serves static `surface.html`
+  - `GET /api/:token/session` → session JSON (rejects if token invalid or expired)
+  - `POST /api/:token/submit` → validates Origin, updates `session.json` atomically, appends `submit` event to `events.jsonl`
+  - `POST /api/:token/need-coach` → appends `need_coach` event to `events.jsonl`
+  - `POST /api/:token/weak-advance` → appends `weak_advance` event to `events.jsonl`
+  - `POST /api/:token/chill/accept` & `resume` → appends chill events
 
-Keep server map keyed by sessionId in module state. Persist session after each POST.
+- [ ] **Step 1: Write unit tests for durable events & atomic store**
+  - Verify `appendEvent` assigns strictly incrementing `seq` (1, 2, 3...) to `events.jsonl`.
+  - Verify `readEventsSince` returns only events with `seq > sinceSeq`.
+  - Verify `tailEvents` resolves immediately if an event with `seq > sinceSeq` already exists, or waits and resolves when written from another process.
+  - Verify `saveSessionAtomic` does not corrupt `session.json` on concurrent read/write and increments `version`.
 
-- [ ] **Step 1: Write failing test** — start server on ephemeral port, POST submit, `waitForEvent` resolves with type submit.
+- [ ] **Step 2: Write server integration test**
+  - Verify server binds to `127.0.0.1` only.
+  - Verify unauthorized requests without token return 401/403.
+  - Verify invalid `Origin` on POST returns 403.
+  - Verify valid POST appends event to disk and updates session JSON.
 
-```ts
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { createSession, onlynessRoot, saveSession } from "../src/session/store.js";
-import { waitForEvent } from "../src/server/events.js";
-import { startServer } from "../src/server/http.js";
-import { writeFileSync, mkdirSync } from "node:fs";
+- [ ] **Step 3: Implement durable events, atomic store, and token-authed server**
+  - Implement `appendEvent`, `readEventsSince`, `tailEvents` in `src/server/events.ts`.
+  - Update `src/session/store.ts` with atomic write helper.
+  - Implement loopback HTTP server with token validation in `src/server/http.ts`.
+  - Implement `src/commands/serve.ts` and `src/server/meta.ts`.
 
-describe("http server", () => {
-  let root: string;
-  let close: (() => Promise<void>) | undefined;
-  afterEach(async () => {
-    if (close) await close();
-    rmSync(root, { recursive: true, force: true });
-  });
+- [ ] **Step 4: Run tests & verify PASS**
 
-  it("accepts submit and wakes waitForEvent", async () => {
-    root = mkdtempSync(join(tmpdir(), "onlyness-"));
-    const s = createSession({});
-    saveSession(root, s);
-    const dir = join(root, s.id);
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "surface.html"), "<html>ok</html>");
-    const srv = await startServer({ rootDir: root, sessionId: s.id, port: 0 });
-    close = srv.close;
-    const pending = waitForEvent(s.id, 2000);
-    await fetch(`http://127.0.0.1:${srv.port}/api/submit`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ paradoxAck: true }),
-    });
-    const ev = await pending;
-    expect(ev?.type).toBe("submit");
-  });
-});
+```bash
+npm test test/events.test.ts test/server.test.ts
 ```
-
-- [ ] **Step 2: Run — expect FAIL**
-
-- [ ] **Step 3: Implement events + http** using `node:http`. On submit, read body, `loadSession`, apply fields:
-
-```ts
-// merge logic inside http.ts
-if (body.paradoxAck === true) session.paradoxAck = true;
-if (body.arena) session.arena = { ...session.arena, ...body.arena };
-if (body.answers) session.answers = { ...session.answers, ...body.answers };
-if (typeof body.statement === "string") session.statement = body.statement;
-if (body.truthmode) {
-  session.truthmode = { ...(session.truthmode ?? emptyTruthmode()), ...body.truthmode };
-}
-```
-
-Write `surface.html` path from `sessionDir`. `port: 0` → use `server.address().port`.
-
-- [ ] **Step 4: Run — expect PASS**
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/server test/server.test.ts
-git commit -m "feat: add local workshop HTTP server and event bus"
+git add src/server src/session src/commands/serve.ts test/events.test.ts test/server.test.ts
+git commit -m "feat: add durable event log, atomic session store, and token-authed loopback server"
 ```
 
 ---
 
-### Task 7: Surface HTML template
+### Task 7: Static Surface Shell with Client-Side Drafts
+
+**Portability fixes addressed:**
+- *Gap 6*: Eliminate server-side page re-renders per step. The human's active editing state is never clobbered mid-typing.
+- The surface is a static single-page shell loaded from `/s/:token/`. It hydrates itself by fetching `/api/:token/session`.
+- In-progress inputs (statements, answers, arena candidates) are cached in client-side storage (`localStorage`) so network drops or step transitions never lose human drafts.
+- Works offline/decoupled from agent turn cycles.
 
 **Files:**
 - Create: `src/surface/template.ts`
 - Create: `test/surface.test.ts`
 
 **Interfaces:**
-- Produces: `renderSurface(session: Session): string` — single HTML document with:
-  - Act 0: Pepsi Paradox copy + ack checkbox
-  - Arena fields + Carvana miniature worked example (static teaching block)
-  - Steps stand/axis/off_axis/onlyness forms (show based on `session.step`)
-  - Truthmode: itch/sticky/jackBlack/cuts + show rubric verdict when present
-  - Coach panel: last coachLog entries + exhausted exits (Examples / Stuck / Advance weak)
-  - JS: `POST /api/submit`, `/api/need-coach`, `/api/weak-advance`; poll `GET /api/session` every 2s to refresh coach messages
+- Produces: `renderSurface(token: string): string` — static HTML/JS/CSS client shell:
+  - Header: Session ID, active step badge, live connection status indicator, and prompt/assignment summary.
+  - Act 0 View: Pepsi Paradox teaching copy + acknowledge checkbox/button.
+  - Arena View: 3 competitor comparison matrix + Carvana worked example teaching card.
+  - Step Views: Stand, Axis, Off-Axis, Onlyness forms with live field binding.
+  - Truthmode View: Rubric checklist (itch, sticky, Jack Black, cuts), Pass 2 adversarial swap, and verdict display.
+  - Coach Panel: Collapsible log of coach replies + budget indicator (e.g. Turn 1/3: Clarify).
+  - Client script:
+    - Queries `/api/:token/session` on load and polls on interval or user action.
+    - Autosaves form drafts to `localStorage`.
+    - Handles form submissions via `fetch('/api/:token/submit', ...)` with JSON payload.
+    - Handles "Need Coach" and "Advance Weak" buttons.
 
-Keep CSS minimal but intentional (not purple-gradient AI slop): cream paper off-limits per user taste — use cool gray + one sharp accent (ink blue), system-ui OK for v1 tool UI (this is a workshop tool, not a marketing landing page).
+- [ ] **Step 1: Write surface HTML test**
+  - Verify `renderSurface(token)` generates static HTML containing the client script, token-bound endpoints, localStorage draft logic, and UI containers for all steps (Paradox through Truthmode).
+  - Verify no dynamic server-rendered step-specific branching that destroys unsubmitted form values.
 
-- [ ] **Step 1: Test that renderSurface includes paradox and onlyness template strings**
+- [ ] **Step 2: Implement static surface shell in `src/surface/template.ts`**
+  - Build clean, minimal, non-slop CSS (neutral dark slate/cool gray typography, ink blue accent, high contrast, zero generic purple gradients).
+  - Include Carvana worked miniature example in the static arena section.
 
-```ts
-import { describe, expect, it } from "vitest";
-import { createSession } from "../src/session/store.js";
-import { renderSurface } from "../src/surface/template.js";
-
-it("renders paradox and statement scaffold", () => {
-  const html = renderSurface(createSession({}));
-  expect(html).toContain("Pepsi Paradox");
-  expect(html).toContain("I am the only");
-  expect(html).toContain("/api/submit");
-});
-```
-
-- [ ] **Step 2–4: Implement template, pass test, commit**
+- [ ] **Step 3: Run test & verify PASS**
 
 ```bash
-git commit -m "feat: add workshop surface HTML template"
+npm test test/surface.test.ts
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/surface test/surface.test.ts
+git commit -m "feat: add static workshop surface shell with client-side draft preservation"
 ```
 
 ---
 
-### Task 8: Wire CLI commands (start, list/home, poll, reply, advance, result, end, playbook, truthmode)
+### Task 8: Resilient CLI Commands, Agent Guardrails & Dumb-Driver Test
+
+**Portability fixes addressed:**
+- *Gap 1 (Human's browser unreachable)*: `start` adds `--no-open`, prominently prints the URL with session token, and explains port forwarding for remote containers/cloud agents (Codespaces, Copilot Workspace, Claude Code web).
+- *Gap 2 (No chat-only path)*: Add `submit <session> --step <step> --json <payload>` command so headless agents without a browser surface can directly relay human answers typed in chat.
+- *Gap 3 (60-second blocking poll timing out)*: `poll` defaults to ~25s wait (`--wait 25`), supports custom `--wait <seconds>`, and emits structured `event: timeout` with retry hints in `next[]`.
+- *Gap 7 (Human free-text prompt injection)*: `poll` fences human free-text in a clearly labeled payload block (`--- BEGIN HUMAN SUBMISSION ---`), truncates by default, and provides `--full` flag.
+- *Weaker Model Guidance*: `poll` output explicitly reports `coachJob: <clarify | ground | mirror>` plus 1 line explaining the specific coaching job for the step, so smaller models don't guess what to do.
+- *Skill discovery beyond Claude*: Add `onlyness-axi init` command that writes/appends standard instructions to `AGENTS.md` for Copilot, Cursor, and other agent harnesses.
+- *Dumb Driver Test*: Standalone end-to-end driver importing none of the project's internal code, verifying the full cross-process loop.
 
 **Files:**
-- Modify: `src/cli/router.ts` (register commands)
-- Modify: `src/commands/home.ts`
-- Create: `src/commands/start.ts`, `poll.ts`, `reply.ts`, `advance.ts`, `result.ts`, `end.ts`, `playbook.ts`, `truthmode.ts`
-- Create: `src/playbooks/index.ts` (+ per-id markdown strings)
-- Modify: `src/skill/content.ts`
-- Delete: `src/commands/items.ts`
-- Modify: `test/cli.test.ts` — keep smoke; add start/list in temp cwd
+- Create: `src/commands/start.ts`
+- Create: `src/commands/poll.ts`
+- Create: `src/commands/submit.ts` (headless chat-only submission)
+- Create: `src/commands/init.ts` (writes `AGENTS.md` discovery block)
+- Create: `src/commands/reply.ts`
+- Create: `src/commands/advance.ts`
+- Create: `src/commands/result.ts`
+- Create: `src/commands/end.ts`
+- Create: `src/commands/playbook.ts`
+- Create: `src/commands/truthmode.ts`
+- Modify: `src/cli/router.ts` (register new commands & flags)
+- Create: `test/dumb-driver.test.ts` (cross-process integration test)
+- Modify: `test/cli.test.ts`
 
-**Interfaces (CLI TOON shapes):**
+**CLI TOON Specifications:**
 
-`start` stdout:
-```
-session: s-…
-step: paradox
-port: 7843
-url: http://127.0.0.1:7843/
-entry: blank
-next[3]:
-  1. Gather mutual context; optional reply with arena draft
-  2. onlyness-axi poll s-…
-  3. onlyness-axi playbook paradox
-```
+1. `start` command:
+   - Flags: `--entry <blank|seed|prune>`, `--seed <path>`, `--seed-text <str>`, `--no-open`, `--port <n>`
+   - Spawns background `serve` daemon, saves `meta.json`.
+   - Output:
+     ```
+     session: s-2026-…
+     step: paradox
+     port: 7843
+     token: tok_a8f9…
+     url: http://127.0.0.1:7843/s/tok_a8f9…
+     remote: Note: forward port 7843 if running in Codespaces/cloud container
+     next[3]:
+       1. Gather mutual context; optional reply with arena draft
+       2. onlyness-axi poll s-2026-… --since 0
+       3. onlyness-axi playbook paradox
+     ```
 
-`poll` stdout on event:
-```
-event: submit
-session: s-…
-step: stand
-coachBudgetUsed: 0
-payload: …
-next[2]:
-  1. Coach within budget (playbook coach) then reply
-  2. onlyness-axi advance s-… when gate ready
-```
+2. `poll` command:
+   - Args: `<sessionId>`
+   - Flags: `--since <seq>` (default 0), `--wait <seconds>` (default 25), `--full`
+   - Algorithm:
+     - Directly checks and tails `.onlyness/<id>/events.jsonl`.
+     - Health-check: Checks if `serve` process is alive via PID/port in `meta.json`. If dead, automatically relaunches `onlyness-axi serve <id>` in the background.
+     - On timeout (no events within `--wait` duration):
+       ```
+       event: timeout
+       session: s-2026-…
+       step: stand
+       lastSeq: 3
+       next[2]:
+         1. onlyness-axi poll s-2026-… --since 3
+         2. onlyness-axi playbook stand
+       ```
+     - On event received:
+       - Fences user payload to mitigate prompt injection.
+       - Outputs current coach turn and explicit job guidance:
+       ```
+       event: submit
+       seq: 4
+       session: s-2026-…
+       step: stand
+       coachBudgetUsed: 1
+       coachJob: clarify
+       coachJobGuidance: Ask 1 question pinning down what they take a stand AGAINST in the arena.
+       payload:
+       --- BEGIN HUMAN SUBMISSION ---
+       {"stand": "We refuse to do multi-day job estimation quotes."}
+       --- END HUMAN SUBMISSION ---
+       next[2]:
+         1. Coach within budget (playbook coach) then reply
+         2. onlyness-axi advance s-2026-… when gate ready
+       ```
 
-`reply` flags: `--text` (required), consumes coach budget unless `--system` (arena prefill / example swap without burning budget)
+3. `submit` command (chat-only headless fallback):
+   - Signature: `onlyness-axi submit <sessionId> --step <step> --json <payload>`
+   - Directly appends `{ seq, type: "submit", payload }` to `events.jsonl` and merges into `session.json`.
+   - Allows agents in environments without browsers to relay chat answers seamlessly.
 
-`truthmode check <session>` runs rubric, writes `truthmode.checks` + provisional verdict, returns TOON
+4. `init` command:
+   - Signature: `onlyness-axi init`
+   - Writes or updates `AGENTS.md` at workspace root with the `onlyness-axi` tool usage snippet, enabling non-Claude agents (Copilot, Cursor, etc.) to discover and operate the CLI.
 
-`truthmode set-swap <session> --text` stores Pass 2
+- [ ] **Step 1: Implement commands**
+  - Implement `submit.ts`, `init.ts`, `start.ts` (with `--no-open` & remote notice), and `poll.ts` (with `--since`, `--wait 25`, prompt injection fencing, `coachJob` directive, and dead-server relaunch).
+  - Register commands in `src/cli/router.ts`.
 
-`result` emits worksheet KV + blocks for answers, statement, truthmode
+- [ ] **Step 2: Implement the 5-step cross-process "Dumb Driver" test in `test/dumb-driver.test.ts`**
+  - Step 1: Run `onlyness-axi start --entry blank --no-open` in child process; extract `session`, `port`, `token`, `url`.
+  - Step 2: POST a submit event to the printed URL with token via HTTP client.
+  - Step 3: Run `onlyness-axi poll <id> --since 0` as an independent separate process; verify it exits 0 and returns the submit event from `events.jsonl`.
+  - Step 4: POST another submit while no poll process is running; confirm subsequent `onlyness-axi poll <id> --since <lastSeq>` returns the new event.
+  - Step 5: Kill the running server process (via PID from `meta.json`); run `onlyness-axi poll <id> --since <seq>`; verify poll detects the dead server, relaunches it via `serve`, and returns cleanly.
 
-- [ ] **Step 1: Implement playbooks as string map**
-
-Ids: `paradox`, `arena`, `stand`, `axis`, `off-axis`, `onlyness`, `truthmode`, `prune`, `coach`  
-Each playbook: purpose, what good looks like, common fails, agent instructions (incl. mutual context + prune cuts question).
-
-- [ ] **Step 2: Implement each command module with CommandSpec; register in router; remove items**
-
-`start` algorithm:
-1. Parse `--entry`, `--seed` (path or inline via `--seed-text`)
-2. `createSession`, optional `writeSeed`, `contextSources` include `seed` if present
-3. `renderSurface` → write `surface.html`
-4. `startServer`, save `port` on session
-5. Open browser: `process.platform` → `open` / `xdg-open` / `start` (ignore failures)
-6. Print TOON + next[]
-
-`poll`: `waitForEvent(id, 60000)` — if null, emit `event: timeout` exit 0 with next retry
-
-`advance`: load → `advanceSession` → save → re-render surface → print new step
-
-`end`: status ended; if no active sessions, close servers
-
-- [ ] **Step 3: Extend CLI tests with temp cwd**
-
-```ts
-it("start then list shows session", () => {
-  const cwd = mkdtempSync(join(tmpdir(), "onlyness-cli-"));
-  const r = spawnSync("node", [bin, "start", "--entry", "blank"], {
-    encoding: "utf8",
-    cwd,
-    env: { ...process.env, ONLYNESS_NO_BROWSER: "1" },
-  });
-  expect(r.status).toBe(0);
-  expect(r.stdout).toMatch(/session:/);
-  const list = spawnSync("node", [bin], { encoding: "utf8", cwd });
-  expect(list.stdout).toMatch(/sessions\[/);
-});
-```
-
-Honor `ONLYNESS_NO_BROWSER=1` in start.
-
-- [ ] **Step 4: `npm test` all green**
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 3: Run dumb driver and CLI tests**
 
 ```bash
-git commit -m "feat: wire onlyness-axi workshop CLI commands"
+npm test test/dumb-driver.test.ts test/cli.test.ts
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/commands src/cli test/dumb-driver.test.ts test/cli.test.ts
+git commit -m "feat: wire resilient CLI commands with durable polling, chat submit, prompt fencing, and dumb-driver test"
 ```
 
 ---
