@@ -1,25 +1,24 @@
 import { existsSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import type { CommandModule } from "../cli/router.js";
 import { AxiError } from "../output/errors.js";
 import { emitBlock, emitKV, print } from "../output/toon.js";
 import { canAdvance, satisfactionComplete } from "../session/steps.js";
-import { saveSession, sessionDir } from "../session/store.js";
+import type { Session } from "../session/types.js";
 import { renderPitch } from "../surface/pitch.js";
-import { requireSession, root } from "./session-io.js";
+import {
+  openInBrowser,
+  pitchFilePath,
+  requireSession,
+} from "./session-io.js";
 
-export function writePitchFile(sessionId: string, html: string): void {
-  const dir = sessionDir(root(), sessionId);
-  writeFileSync(join(dir, "pitch.html"), html);
+export function writePitchFile(sessionId: string, html: string): string {
+  const path = pitchFilePath(sessionId);
+  writeFileSync(path, html, "utf8");
+  return path;
 }
 
-export function pitchUrl(port: number | undefined): string {
-  if (!port) return "";
-  return `http://127.0.0.1:${port}/pitch`;
-}
-
-/** Generate pitch.html when satisfaction + statement + non-fail truthmode. */
-export function generatePitch(sessionId: string) {
+/** Generate pitch.html when satisfaction + statement + swap + non-fail truthmode. */
+export function generatePitch(sessionId: string): { session: Session; path: string } {
   const session = requireSession(sessionId);
   if (!session.statement.trim()) {
     throw new AxiError(
@@ -34,10 +33,16 @@ export function generatePitch(sessionId: string) {
       `onlyness-axi truthmode check ${sessionId}`,
     );
   }
+  if (!t.swap.trim()) {
+    throw new AxiError(
+      "adversarial swap not recorded",
+      `onlyness-axi truthmode set-swap ${sessionId} --text "…"`,
+    );
+  }
   if (t.verdict === "fail") {
     throw new AxiError(
       "truthmode failed",
-      "revise the statement until truthmode is pass or weak",
+      `revise off_axis or onlyness before pitch: onlyness-axi revise ${sessionId} onlyness`,
     );
   }
   if (!satisfactionComplete(session.satisfaction)) {
@@ -47,8 +52,8 @@ export function generatePitch(sessionId: string) {
     );
   }
   const html = renderPitch(session);
-  writePitchFile(session.id, html);
-  return session;
+  const path = writePitchFile(session.id, html);
+  return { session, path };
 }
 
 export const pitchCommand: CommandModule = {
@@ -58,26 +63,36 @@ export const pitchCommand: CommandModule = {
     args: [
       { name: "session", required: true, description: "session id" },
     ],
-    flags: [],
-    examples: ["onlyness-axi pitch s-…"],
+    flags: [
+      {
+        name: "open",
+        type: "boolean",
+        default: false,
+        description: "open generated pitch.html in default browser",
+      },
+    ],
+    examples: [
+      "onlyness-axi pitch s-…",
+      "onlyness-axi pitch s-… --open",
+    ],
   },
   run(parsed) {
     const id = parsed.positionals[0]!;
-    const session = generatePitch(id);
-    const url = pitchUrl(session.port);
-    const path = join(sessionDir(root(), session.id), "pitch.html");
+    const { session, path } = generatePitch(id);
+    if (parsed.flags["open"]) {
+      openInBrowser(path);
+    }
 
     print(
       emitKV([
         ["session", session.id],
         ["pitchFile", path],
-        ["pitchUrl", url || "(serve running? open /pitch)"],
         ["gate", canAdvance({ ...session, step: "pitch" }).ok ? "ready" : "blocked"],
       ]),
     );
     print(
       emitBlock("next", [
-        url ? `1. Open ${url}` : "1. onlyness-axi serve " + session.id,
+        `1. Open ${path}`,
         `2. onlyness-axi advance ${session.id} when satisfied (to done)`,
         `3. onlyness-axi result ${session.id}`,
       ]),
@@ -87,5 +102,5 @@ export const pitchCommand: CommandModule = {
 };
 
 export function pitchFileExists(sessionId: string): boolean {
-  return existsSync(join(sessionDir(root(), sessionId), "pitch.html"));
+  return existsSync(pitchFilePath(sessionId));
 }

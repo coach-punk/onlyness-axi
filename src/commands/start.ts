@@ -1,123 +1,17 @@
-import { spawn, type ChildProcess } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { setTimeout as delay } from "node:timers/promises";
 import type { CommandModule } from "../cli/router.js";
-import { AxiError, UsageError } from "../output/errors.js";
+import { UsageError } from "../output/errors.js";
 import { emitBlock, emitKV, print } from "../output/toon.js";
+import { createSession, saveSession, writeSeed } from "../session/store.js";
 import type { EntryKind } from "../session/types.js";
-import {
-  createSession,
-  saveSession,
-  writeSeed,
-} from "../session/store.js";
-import { readServerMeta } from "../server/meta.js";
-import { root, writeSurfaceFile } from "./session-io.js";
+import { openInBrowser, root, writeWorkshopFile } from "./session-io.js";
 
 const ENTRIES: EntryKind[] = ["blank", "seed", "prune"];
-const SERVER_WAIT_MS = 5_000;
-const SERVER_POLL_MS = 50;
-
-function openBrowser(url: string): void {
-  if (process.env["ONLYNESS_NO_BROWSER"] === "1") return;
-  const platform = process.platform;
-  let cmd: string;
-  let args: string[];
-  if (platform === "darwin") {
-    cmd = "open";
-    args = [url];
-  } else if (platform === "win32") {
-    cmd = "cmd";
-    args = ["/c", "start", "", url];
-  } else {
-    cmd = "xdg-open";
-    args = [url];
-  }
-  try {
-    const child = spawn(cmd, args, {
-      detached: true,
-      stdio: "ignore",
-    });
-    child.unref();
-  } catch {
-    // Browser open is best-effort.
-  }
-}
-
-function entryBin(): string {
-  const fromArgv = process.argv[1];
-  if (fromArgv && fromArgv.length > 0) return fromArgv;
-  throw new AxiError(
-    "cannot locate onlyness-axi binary",
-    "run via bin/onlyness-axi.js or the installed CLI",
-  );
-}
-
-function spawnServe(sessionId: string): ChildProcess {
-  const child = spawn(
-    process.execPath,
-    [entryBin(), "serve", sessionId],
-    {
-      detached: true,
-      stdio: "ignore",
-      cwd: process.cwd(),
-      env: process.env,
-    },
-  );
-  child.unref();
-  return child;
-}
-
-function tryKillPid(pid: number): void {
-  try {
-    process.kill(pid);
-  } catch {
-    // Process may already be gone.
-  }
-}
-
-/** Kill orphaned serve if ready-wait fails (prefer server.json pid). */
-function killOrphanServe(
-  rootDir: string,
-  sessionId: string,
-  spawnPid: number | undefined,
-): void {
-  const meta = readServerMeta(rootDir, sessionId);
-  if (meta?.pid) {
-    tryKillPid(meta.pid);
-    return;
-  }
-  if (typeof spawnPid === "number" && spawnPid > 0) {
-    tryKillPid(spawnPid);
-  }
-}
-
-async function waitForServeReady(
-  rootDir: string,
-  sessionId: string,
-): Promise<number> {
-  const deadline = Date.now() + SERVER_WAIT_MS;
-  while (Date.now() < deadline) {
-    const meta = readServerMeta(rootDir, sessionId);
-    if (meta) {
-      try {
-        const res = await fetch(`http://127.0.0.1:${meta.port}/`);
-        if (res.ok) return meta.port;
-      } catch {
-        // Server may still be binding — retry.
-      }
-    }
-    await delay(SERVER_POLL_MS);
-  }
-  throw new AxiError(
-    `serve did not become ready for ${sessionId}`,
-    `run onlyness-axi serve ${sessionId}`,
-  );
-}
 
 export const startCommand: CommandModule = {
   spec: {
     name: "start",
-    summary: "Create a workshop session, write surface, open browser",
+    summary: "Create a workshop session and generate standalone workshop.html",
     flags: [
       {
         name: "entry",
@@ -136,14 +30,20 @@ export const startCommand: CommandModule = {
         type: "string",
         description: "inline seed text (alternative to --seed)",
       },
+      {
+        name: "no-open",
+        type: "boolean",
+        default: false,
+        description: "do not open workshop.html in the browser",
+      },
     ],
     examples: [
       "onlyness-axi start --entry blank",
       "onlyness-axi start --entry seed --seed ./notes.md",
-      "onlyness-axi start --entry prune --seed-text 'cut features'",
+      "onlyness-axi start --entry prune --seed-text 'cut enterprise features'",
     ],
   },
-  async run(parsed) {
+  run(parsed) {
     const entry = String(parsed.flags["entry"] ?? "blank") as EntryKind;
     if (!ENTRIES.includes(entry)) {
       throw new UsageError(
@@ -187,34 +87,25 @@ export const startCommand: CommandModule = {
     if (seedText !== undefined) {
       writeSeed(rootDir, session.id, seedText);
     }
-    writeSurfaceFile(session);
+    const workshopFile = writeWorkshopFile(session, rootDir);
 
-    const serveChild = spawnServe(session.id);
-    let port: number;
-    try {
-      port = await waitForServeReady(rootDir, session.id);
-    } catch (err) {
-      killOrphanServe(rootDir, session.id, serveChild.pid);
-      throw err;
+    if (!parsed.flags["no-open"]) {
+      openInBrowser(workshopFile);
     }
-
-    const url = `http://127.0.0.1:${port}/`;
-    openBrowser(url);
 
     print(
       emitKV([
         ["session", session.id],
         ["step", session.step],
-        ["port", port],
-        ["url", url],
         ["entry", session.entry],
+        ["workshopFile", workshopFile],
       ]),
     );
     print(
       emitBlock("next", [
-        "1. Gather mutual context; optional reply with arena draft",
-        `2. onlyness-axi poll ${session.id}`,
-        "3. onlyness-axi playbook paradox",
+        `1. Gather mutual context; optional: onlyness-axi prefill ${session.id} --industry "…" --offering "…" --audience "…"`,
+        `2. Optional live sync: onlyness-axi view ${session.id}`,
+        `3. onlyness-axi playbook paradox`,
       ]),
     );
     return 0;

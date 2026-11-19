@@ -29,39 +29,39 @@ const paradox = `# Paradox (Act 0)
 Teach why “better” is the wrong game: blind taste vs branded choice (Pepsi Paradox). Name mid-lifecycle pruning — sharpening focus by cutting — so the human expects tradeoffs later.
 
 ## What good looks like
-- Human acknowledges the paradox (not just skims).
+- Human tries the blindfold toggle on \`workshop.html\` and acknowledges the paradox.
 - They can say in one sentence why winning the axis of better may still lose the market.
 - Curiosity is up; defensiveness is down.
 
 ## Common fails
-- Skipping ack and jumping to features.
+- Skipping Act 0 and jumping to features.
 - Treating paradox as trivia instead of a framing tool.
 - Coaching abstract theory with empty arena.
 
 ## Agent instructions
-1. Prefer mutual context (chat, memory tools, prior \`.onlyness/\` sessions, seed) before generic lecture.
-2. Keep teaching short; point at the surface paradox copy.
-3. After ack, move to arena + worked example — never unlock Step 1 without Act 0 complete.
-4. Optional prune seed question: if this positioning were true, what would you cut?
+1. Gather mutual context (chat, memory tools, prior \`.onlyness/\` sessions, seed) before generic lecture.
+2. Point them at the interactive blindfold toggle in \`workshop.html\` (or explain in chat for headless runs).
+3. Record ack via canvas or \`submit <id> --json '{"paradoxAck":true}'\`; never unlock Step 1 without Act 0 complete.
+4. Prefill arena via \`prefill <id>\` when context justifies it.
 `;
 
 const arena = `# Arena (Act 0)
 
 ## Purpose
-Ground the workshop in a real assignment: industry/category, offering, and who you sell to — so coaching isn’t generic.
+Ground the workshop in a real assignment: industry/category, offering, and who you sell to — so coaching and the spatial map aren’t generic.
 
 ## What good looks like
 - Three short, concrete lines (industry, offering, audience).
-- Language the human already uses; seed/memory may prefill.
-- Worked example (default Carvana-style or arena analogue) is visible as teaching, not their answer.
+- Language the human already uses; \`prefill <id>\` may populate defaults + a custom \`--example-json\` specimen.
+- Worked specimen (default Carvana, or arena analogue) sits visibly on the canvas as teaching, not their answer.
 
 ## Common fails
 - Vague category wishes (“people need a website”).
 - Empty arena while burning coach budget on lectures.
-- Treating the worked example as the human’s draft.
+- Treating the worked specimen as the human’s draft.
 
 ## Agent instructions
-1. Gather mutual context first; prefill arena via \`reply --system\` when justified; record contextSources.
+1. Gather mutual context first; prefill arena via \`prefill <id>\` and record \`--source\`.
 2. Do not burn coach budget until arena is filled enough to ground metaphors.
 3. Gate: paradox ack + arena filled before advancing to stand.
 4. Ask prune/cuts when entry is prune or after Steps 3–4: if this onlyness were true, what would you cut?
@@ -70,7 +70,7 @@ Ground the workshop in a real assignment: industry/category, offering, and who y
 const stand = `# Stand (Step 1)
 
 ## Purpose
-Capture problem parameters: who hurts, what job they’re hiring for, what “solved” looks like.
+Capture problem parameters: who hurts, what job they’re hiring for, what “solved” looks like. These stay pinned in the compass strip across Steps 2–4.
 
 ## What good looks like
 - Specific who (not “everyone”).
@@ -83,65 +83,65 @@ Capture problem parameters: who hurts, what job they’re hiring for, what “so
 - Answers that ignore the arena.
 
 ## Agent instructions
-1. Coach within the 3-turn budget (clarify → ground → mirror); use \`playbook coach\`.
+1. Coach within the 3-turn budget (clarify -> ground -> mirror) using \`coach <id> --text "…"\`.
 2. Reject vagueness using arena language.
-3. Prefer mutual context over starting from zero.
+3. Inspect progress anytime with \`status <id>\`.
 4. After a solid stand, optionally ask what they would cut if the eventual onlyness were true.
 `;
 
 const axis = `# Axis of better (Step 2)
 
 ## Purpose
-Name the industry’s bad→good scale from Stand, place the idea on it, and name the outcome if they *win that race*.
+Name the industry’s bad->good poles from Stand, drop Brad Pitt rivals onto the 1D spatial line, place your own marker, and name what happens if you *win that race*.
 
 ## What good looks like
-- Named scale rooted in Step 1 (not a random feature list).
-- Honest placement of their idea on that scale.
-- Clear “if we win this axis, customers get ___.”
+- Clear \`leftPole\` and \`rightPole\` rooted in Step 1 (not a random feature list).
+- Real rival markers plotted along the line showing where everyone crowds.
+- Honest placement of their idea + clear “if we win this axis, customers only get ___.”
 
 ## Common fails
 - Inventing a flattering axis unrelated to Stand.
-- Listing features instead of a single competitive scale.
-- Pretending they already own a paradigm (that’s later).
+- Leaving rivals empty so crowding stays invisible.
+- Pretending they already own a paradigm (that’s Step 3).
 
 ## Agent instructions
-1. Keep them on one axis; mirror when they sneak in onlyness claims early.
-2. Ground metaphors in arena + mutual context.
-3. Budget: clarify → ground → mirror, then exits.
+1. Have them plot rivals and drag their marker on the 1D axis in \`workshop.html\` (or relay via \`submit\`).
+2. When they park next to rivals, mirror how interchangeable the race looks.
+3. Budget: clarify -> ground -> mirror, then exits.
 4. Prune prompt when useful: winning this axis usually means cutting what?
 `;
 
 const offAxis = `# Off-axis (Step 3)
 
 ## Purpose
-Leave fizzy-water competition. Own the territory (feeling / ritual / identity) even if a rival “tastes better.”
+Leave fizzy-water competition. Open the vertical dimension on the 2D spatial canvas and drag off the crowded floor into territory (feeling / ritual / model) even if a rival “tastes better.”
 
 ## What good looks like
-- Territory that is not a synonym of Step 2’s axis.
+- Vertical dimension label (\`axisLabel\`) and \`territory\` that are not synonyms of Step 2’s axis.
+- Clear vertical lift (\`selfY\`) on the 2D map leaving Brad Pitt rivals glued to the floor.
 - A claim a find-replace rival cannot steal.
-- Language that foreshadows the onlyness draft.
 
 ## Common fails
 - Synonyms of the better-axis (“premium,” “faster,” “AI-powered”).
+- Hovering near the floor with no real leap.
 - Geographic or inventory scarcity.
-- Category restatement.
 
 ## Agent instructions
 1. Block axis synonyms hard; send back rather than pep-talk.
 2. Use adversarial mirror: “a rival could say the same…”
 3. Ask: if this off-axis territory were true, what would you cut?
-4. Do not skip ahead to truthmode; draft onlyness next.
+4. If they later fail truthmode, return here via \`revise <id> off_axis\`.
 `;
 
 const onlyness = `# Onlyness draft (Step 4)
 
 ## Purpose
-Fill \`I am the only ______ that ______\` as a paradigm claim, not geographic or category scarcity.
+Fill \`I am the only ______ that ______\` (or \`We are / Our brand is the only\`) as a paradigm claim, not geographic or category scarcity.
 
 ## What good looks like
-- Starts with the onlyness frame.
-- Differentiating clause tied to off-axis territory + stand.
-- Human owns final wording (agent may offer 2–3 candidates).
+- Clear category noun and concrete differentiator clause tied to off-axis territory + stand.
+- Survives the live rubric pre-check and the Brad Pitt find-replace preview.
+- Human owns final wording (agent may offer 2–3 candidates grounded in context).
 
 ## Common fails
 - “Only dealer on this curb” / inventory scarcity.
@@ -149,7 +149,7 @@ Fill \`I am the only ______ that ______\` as a paradigm claim, not geographic or
 - Better/faster/cheaper cosplay.
 
 ## Agent instructions
-1. Ground candidates in arena + prior answers + mutual context.
+1. Ground candidates in arena + spatial leap + mutual context.
 2. Offer options; do not overwrite human ownership.
 3. Ask prune/cuts: if this onlyness were true, what would you cut?
 4. Advance to truthmode; never skip Pass 1–3.
@@ -162,18 +162,18 @@ Stress-test the draft: deterministic rubric, adversarial swap, then itch / stick
 
 ## What good looks like
 - \`truthmode check\` run with concrete fail/weak reasons.
-- Pass 2 swap stored via \`set-swap\` — generic rival rewrite that breaks or exposes lame symmetry.
-- Surface answers for itch, sticky, jackBlack; cuts[] when prune intent.
+- Pass 2 swap stored via \`truthmode set-swap\` — generic rival rewrite that breaks or exposes lame symmetry.
+- Surface/chat answers for itch, sticky, jackBlack; cuts[] when prune intent.
 
 ## Common fails
 - Skipping rubric or swap.
-- Pep-talking past fail/weak instead of send-back to Step 3/4.
+- Pep-talking past fail/weak instead of using \`revise <id> off_axis\` or \`revise <id> onlyness\`.
 - Treating weak insistence as a clean pass downstream.
 
 ## Agent instructions
 1. Run \`onlyness-axi truthmode check <session>\` then coach from checks.
-2. Write Pass 2 with \`truthmode set-swap --text\`.
-3. Prefer revise over pep talk on fail/weak; weakAdvance only if human insists (label it).
+2. Write Pass 2 with \`truthmode set-swap <id> --text "…"\`.
+3. On fail or weak, prefer \`revise <id> off_axis\` / \`revise <id> onlyness\` over pep talk.
 4. Include cuts question for prune paths.
 `;
 
@@ -185,7 +185,7 @@ Mid-lifecycle sharpening: use onlyness work to decide what to cut, not only what
 ## What good looks like
 - Entry \`prune\` or explicit cuts conversation.
 - Cuts tied to a true onlyness (features, audiences, channels that fight the claim).
-- Human leaves with a short cuts[] list, not just a slogan.
+- Human leaves with a short cuts[] list on the Prune Knife board, not just a slogan.
 
 ## Common fails
 - Cutting randomly without a paradigm hook.
@@ -193,7 +193,7 @@ Mid-lifecycle sharpening: use onlyness work to decide what to cut, not only what
 - Empty cuts after a “pass” statement.
 
 ## Agent instructions
-1. Still run full arc: paradox → arena → steps → truthmode.
+1. Still run full arc: paradox -> arena -> steps -> truthmode.
 2. Repeatedly ask: if this onlyness were true, what would you cut?
 3. Persist cuts on truthmode / result for downstream agents.
 4. Prefer mutual context (prior sessions, seed) to spot feature creep.
@@ -202,23 +202,23 @@ Mid-lifecycle sharpening: use onlyness work to decide what to cut, not only what
 const pitchPb = `# Pitch deliverable
 
 ## Purpose
-The human-facing deliverable is a **concrete philosophy** — reverse-walk elevator pitch — not specs or a tech stack.
+The human-facing deliverable is a **concrete philosophy** — reverse-walk elevator pitch with their spatial map and rival contrast — not specs or a tech stack.
 
 ## What good looks like
-- Truthmode is pass (or weak they own).
+- Truthmode is pass (or weak they own), with Pass 2 swap recorded.
 - Human confirms satisfaction with stand, axis, off-axis, onlyness, **and** the statement.
-- \`pitch.html\` opens on the statement, walks 4→3→2→1 contrasting Brad Pitts, lands on the statement again.
+- \`pitch.html\` opens on the statement, walks 4->3->2->1 against their real plotted rivals and cuts, and lands on the statement again.
 
 ## Common fails
-- Generating pitch before satisfaction checkboxes.
+- Generating pitch before satisfaction checkboxes or Pass 2 swap.
 - Treating pitch as a feature list or stack dump.
 - Skipping the reverse walk.
 
 ## Agent instructions
-1. After truthmode, advance to \`pitch\` step; wait for satisfaction submit.
-2. Run \`onlyness-axi pitch <id>\` then open \`/pitch\` (serve must be up).
+1. After truthmode, advance to \`pitch\` step; wait for satisfaction submit (or use \`revise\` if anything feels weak).
+2. Run \`onlyness-axi pitch <id> --open\` to generate and view \`pitch.html\`.
 3. Advance to \`done\` when they are happy with the pitch page.
-4. \`result\` includes \`pitchUrl\` when the file exists.
+4. \`result\` emits the complete worksheet + \`pitchFile\` path.
 `;
 
 const coach = `# Coach budget
@@ -233,27 +233,26 @@ Stubborn humans need nudges; infinite roasting loses them. Cap at 3 turns per st
 | 2 | ground | Reframe using arena / mutual context |
 | 3 | mirror | Adversarial “a rival could say the same…” |
 
-Then surface exits: examples, stuck/need-coach, or advance with weak flag. Budget resets on step advance or substantive answer change.
+Then surface exits: examples, stuck/need-coach, revise, or advance with weak flag. Budget resets on step advance, \`revise\`, or substantive answer change.
 
 ## Chill (agent-only)
 There is **no** always-visible escape hatch. If the human is hostile, contemptuous, shame-spiraling, or clearly “not getting it” and forcing more turns will make it worse:
-1. Offer **one** chill break via \`reply --system --offer-chill --text "…"\` (does **not** burn coach budget).
-2. Do not nag if they decline; clear \`chillOffered\` by continuing work.
-3. If they accept (surface **Accept break**) or you run \`chill <id>\`, stop polling pressure — let them resume later with \`resume\`.
+1. Offer **one** chill break via \`coach <id> --system --offer-chill --text "…"\` (does **not** burn coach budget).
+2. Do not nag if they decline; continuing work clears it.
+3. If they accept (or you run \`chill <id>\`), stop pressure — let them resume later with \`resume <id>\`.
 4. Never invent a permanent “take a break” button on the workshop.
 
 ## Common fails
 - Burning turns on lectures while arena is empty.
 - Fourth roast after budget exhausted.
-- Using \`reply\` without \`--system\` for arena prefill / example swap (that should not burn budget).
+- Using \`coach\` without \`--system\` for housekeeping notes (burns budget).
 - Offering chill every turn (nagging).
 
 ## Agent instructions
-1. \`reply --text\` consumes budget unless \`--system\` or \`--offer-chill\`.
-2. After exhausted, stop coaching; suggest exits / \`advance\` when gate ready.
-3. Fetch step playbooks on demand; keep skill thin.
+1. \`coach --text\` (alias \`reply\`) consumes budget unless \`--system\` or \`--offer-chill\`.
+2. After exhausted, stop coaching; suggest exits, \`revise\`, or \`advance\` when gate ready.
+3. Inspect anytime with \`status <id>\`; relay chat answers via \`submit <id> --json\`.
 4. Never skip Act 0 or truthmode.
-5. Prefer chill over another roast when attitude is the blocker.
 `;
 
 export const PLAYBOOKS: Record<PlaybookId, string> = {

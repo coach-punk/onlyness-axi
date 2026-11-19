@@ -6,14 +6,14 @@ import { emitBlock, emitKV, print } from "../output/toon.js";
 import { loadSession, saveSession, sessionDir } from "../session/store.js";
 import type { Session } from "../session/types.js";
 import { renderChill } from "../surface/chill.js";
-import { requireSession, root } from "./session-io.js";
+import { chillFilePath, requireSession, root } from "./session-io.js";
 
 export function writeChillFile(
   rootDir: string,
   sessionId: string,
   html: string,
 ): void {
-  writeFileSync(join(sessionDir(rootDir, sessionId), "chill.html"), html);
+  writeFileSync(join(sessionDir(rootDir, sessionId), "chill.html"), html, "utf8");
 }
 
 export function pauseSession(
@@ -36,24 +36,30 @@ export function pauseSession(
       "start a new session with onlyness-axi start",
     );
   }
+  const trimmedReason = reason?.trim() ? reason.trim() : undefined;
   session = {
     ...session,
     status: "paused",
     chillOfferedAt: null,
+    ...(trimmedReason !== undefined ? { chillReason: trimmedReason } : {}),
     coachLog: [
       ...session.coachLog,
       {
         at: new Date().toISOString(),
         step: session.step,
         role: "system",
-        text: reason?.trim()
-          ? `chill: paused — ${reason.trim()}`
+        text: trimmedReason
+          ? `chill: paused — ${trimmedReason}`
           : "chill: paused — take a break and come back later",
       },
     ],
   };
   saveSession(rootDir, session);
-  writeChillFile(rootDir, session.id, renderChill(session, reason));
+  writeChillFile(
+    rootDir,
+    session.id,
+    renderChill(session, trimmedReason, { live: false, token: "" }),
+  );
   return session;
 }
 
@@ -84,21 +90,19 @@ export const chillCommand: CommandModule = {
         ? parsed.flags["reason"]
         : undefined;
     const session = pauseSession(root(), id, reason);
-    const url = session.port
-      ? `http://127.0.0.1:${session.port}/`
-      : "(start serve to open chill page)";
+    const chillFile = chillFilePath(session.id);
 
     print(
       emitKV([
         ["session", session.id],
         ["status", session.status],
         ["step", session.step],
-        ["url", url],
+        ["chillFile", chillFile],
       ]),
     );
     print(
       emitBlock("next", [
-        "1. Human chills — do not poll-nag",
+        `1. Open ${chillFile} (or run onlyness-axi view ${session.id})`,
         `2. onlyness-axi resume ${session.id} when they are ready`,
       ]),
     );

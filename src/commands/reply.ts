@@ -4,7 +4,12 @@ import { emitBlock, emitKV, print } from "../output/toon.js";
 import { consumeCoachTurn } from "../session/coach.js";
 import { saveSession } from "../session/store.js";
 import type { Session } from "../session/types.js";
-import { requireSession, root, writeSurfaceFile } from "./session-io.js";
+import {
+  requireSession,
+  root,
+  workshopFilePath,
+  writeWorkshopFile,
+} from "./session-io.js";
 
 function appendSystem(session: Session, text: string): Session {
   return {
@@ -21,10 +26,10 @@ function appendSystem(session: Session, text: string): Session {
   };
 }
 
-export const replyCommand: CommandModule = {
+export const coachCommand: CommandModule = {
   spec: {
-    name: "reply",
-    summary: "Post a coach or system message onto the session surface",
+    name: "coach",
+    summary: "Post a coach or system message onto the workshop surface (alias: reply)",
     args: [
       { name: "session", required: true, description: "session id" },
     ],
@@ -49,9 +54,9 @@ export const replyCommand: CommandModule = {
       },
     ],
     examples: [
-      'onlyness-axi reply s-… --text "Who specifically hurts?"',
-      'onlyness-axi reply s-… --system --text "Arena draft from mutual context"',
-      'onlyness-axi reply s-… --system --offer-chill --text "Take a break — come back when your head is clearer."',
+      'onlyness-axi coach s-… --text "Who specifically hurts?"',
+      'onlyness-axi coach s-… --system --text "Arena draft from mutual context"',
+      'onlyness-axi coach s-… --system --offer-chill --text "Take a break — come back when your head is clearer."',
     ],
   },
   run(parsed) {
@@ -60,7 +65,7 @@ export const replyCommand: CommandModule = {
     if (typeof text !== "string" || !text.trim()) {
       throw new UsageError(
         "flag --text is required",
-        'usage: onlyness-axi reply <session> --text "…"',
+        'usage: onlyness-axi coach <session> --text "…"',
       );
     }
     const asSystem = Boolean(parsed.flags["system"]);
@@ -71,7 +76,13 @@ export const replyCommand: CommandModule = {
     if (session.status === "paused") {
       throw new AxiError(
         "session is paused",
-        `onlyness-axi resume ${id} before replying`,
+        `onlyness-axi resume ${id} before coaching`,
+      );
+    }
+    if (session.status === "ended") {
+      throw new AxiError(
+        "session already ended",
+        "start a new session with onlyness-axi start",
       );
     }
 
@@ -83,7 +94,7 @@ export const replyCommand: CommandModule = {
       if (result.exhausted) {
         throw new AxiError(
           "coach budget exhausted for this step",
-          "offer exits (examples / stuck / weak advance), chill, or advance when gate ready",
+          "offer exits (examples / stuck / weak advance), chill, revise, or advance when gate ready",
         );
       }
       session = result.session;
@@ -97,26 +108,29 @@ export const replyCommand: CommandModule = {
     }
 
     saveSession(rootDir, session);
-    writeSurfaceFile(session);
+    writeWorkshopFile(session, rootDir);
 
     print(
       emitKV([
         ["session", session.id],
         ["step", session.step],
         ["role", asSystem || offerChill ? "system" : "coach"],
-        ["coachBudgetUsed", session.coachBudget.used],
+        ["coachBudgetUsed", `${session.coachBudget.used}/${session.coachBudget.max}`],
         ["lastJob", session.coachBudget.lastJob ?? ""],
         ["chillOffered", offerChill ? "true" : "false"],
+        ["workshopFile", workshopFilePath(session.id)],
       ]),
     );
     print(
       emitBlock("next", [
         offerChill
-          ? "1. Wait for Accept break (or onlyness-axi chill " + id + ")"
-          : `1. onlyness-axi poll ${session.id}`,
+          ? `1. Wait for Accept break (or onlyness-axi chill ${id})`
+          : `1. onlyness-axi status ${session.id}`,
         `2. onlyness-axi advance ${session.id} when gate ready`,
       ]),
     );
     return 0;
   },
 };
+
+export const replyCommand = coachCommand;

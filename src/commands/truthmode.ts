@@ -1,5 +1,5 @@
 import type { CommandModule } from "../cli/router.js";
-import { UsageError } from "../output/errors.js";
+import { AxiError, UsageError } from "../output/errors.js";
 import { emitBlock, emitKV, emitList, print } from "../output/toon.js";
 import { saveSession } from "../session/store.js";
 import { runRubric } from "../truthmode/rubric.js";
@@ -7,7 +7,8 @@ import {
   emptyTruthmode,
   requireSession,
   root,
-  writeSurfaceFile,
+  workshopFilePath,
+  writeWorkshopFile,
 } from "./session-io.js";
 
 type Subcommand = "check" | "set-swap";
@@ -74,6 +75,12 @@ export const truthmodeCommand: CommandModule = {
 
 function runCheck(sessionId: string): number {
   let session = requireSession(sessionId);
+  if (session.status === "paused") {
+    throw new AxiError(
+      "session is paused",
+      `onlyness-axi resume ${sessionId} before running truthmode`,
+    );
+  }
   const rootDir = root();
   const { verdict, checks } = runRubric(session.statement, session.arena);
   session = {
@@ -85,13 +92,14 @@ function runCheck(sessionId: string): number {
     },
   };
   saveSession(rootDir, session);
-  writeSurfaceFile(session);
+  const workshopFile = writeWorkshopFile(session, rootDir);
 
   print(
     emitKV([
       ["session", session.id],
       ["verdict", verdict],
       ["statement", session.statement],
+      ["workshopFile", workshopFile],
     ]),
   );
   if (checks.length > 0) {
@@ -109,12 +117,18 @@ function runCheck(sessionId: string): number {
   } else {
     print("checks[0]:");
   }
-  print(
-    emitBlock("next", [
-      `1. onlyness-axi truthmode set-swap ${session.id} --text "…"`,
-      `2. Fill itch/sticky/jackBlack on surface, then advance`,
-    ]),
-  );
+
+  const nextLines =
+    verdict === "fail"
+      ? [
+          `1. onlyness-axi revise ${session.id} onlyness (or off_axis)`,
+          `2. onlyness-axi truthmode set-swap ${session.id} --text "…"`,
+        ]
+      : [
+          `1. onlyness-axi truthmode set-swap ${session.id} --text "…"`,
+          `2. Fill itch/sticky/jackBlack via submit or canvas, then advance`,
+        ];
+  print(emitBlock("next", nextLines));
   return 0;
 }
 
@@ -126,27 +140,34 @@ function runSetSwap(sessionId: string, textFlag: string | boolean | undefined): 
     );
   }
   let session = requireSession(sessionId);
+  if (session.status === "paused") {
+    throw new AxiError(
+      "session is paused",
+      `onlyness-axi resume ${sessionId} before set-swap`,
+    );
+  }
   const rootDir = root();
   session = {
     ...session,
     truthmode: {
       ...(session.truthmode ?? emptyTruthmode()),
-      swap: textFlag,
+      swap: textFlag.trim(),
     },
   };
   saveSession(rootDir, session);
-  writeSurfaceFile(session);
+  writeWorkshopFile(session, rootDir);
 
   print(
     emitKV([
       ["session", session.id],
-      ["swap", textFlag],
+      ["swap", textFlag.trim()],
       ["verdict", session.truthmode?.verdict ?? ""],
+      ["workshopFile", workshopFilePath(session.id)],
     ]),
   );
   print(
     emitBlock("next", [
-      "1. Complete itch / sticky / jackBlack on surface",
+      `1. Complete itch / sticky / jackBlack via submit or canvas`,
       `2. onlyness-axi advance ${session.id} when gate ready`,
     ]),
   );

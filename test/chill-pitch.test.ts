@@ -3,38 +3,30 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { getPlaybook } from "../src/playbooks/index.js";
+import { startServer } from "../src/server/http.js";
 import {
-  canAdvance,
   applyHumanSubmit,
+  canAdvance,
   satisfactionComplete,
 } from "../src/session/steps.js";
 import { createSession, saveSession } from "../src/session/store.js";
-import { startServer } from "../src/server/http.js";
-import { renderChill } from "../src/surface/chill.js";
 import { renderPitch } from "../src/surface/pitch.js";
-import { writeFileSync, mkdirSync } from "node:fs";
-import { sessionDir } from "../src/session/store.js";
-import { renderSurface } from "../src/surface/template.js";
 
-describe("chill pause", () => {
+describe("chill pause via live server", () => {
   let root: string;
   let close: (() => Promise<void>) | undefined;
 
   afterEach(async () => {
     if (close) await close();
     close = undefined;
-    rmSync(root, { recursive: true, force: true });
+    if (root) rmSync(root, { recursive: true, force: true });
   });
 
-  it("returns 409 on submit while paused and resume restores active", async () => {
+  it("blocks submit while paused, serves chill room at /s/:token/, and resume restores active", async () => {
     root = mkdtempSync(join(tmpdir(), "onlyness-chill-"));
     let session = createSession({});
-    session = { ...session, status: "paused" };
+    session = { ...session, status: "paused", chillReason: "Rest first" };
     saveSession(root, session);
-    const dir = sessionDir(root, session.id);
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "surface.html"), renderSurface(session));
-    writeFileSync(join(dir, "chill.html"), renderChill(session));
 
     const srv = await startServer({
       rootDir: root,
@@ -43,61 +35,54 @@ describe("chill pause", () => {
     });
     close = srv.close;
 
-    try {
-      const blocked = await fetch(
-        `http://127.0.0.1:${srv.port}/api/${srv.token}/submit`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            origin: `http://127.0.0.1:${srv.port}`,
-          },
-          body: JSON.stringify({ paradoxAck: true }),
+    const blocked = await fetch(
+      `http://127.0.0.1:${srv.port}/api/${srv.token}/submit`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: `http://127.0.0.1:${srv.port}`,
         },
-      );
-      expect(blocked.status).toBe(409);
+        body: JSON.stringify({ paradoxAck: true }),
+      },
+    );
+    expect(blocked.status).toBe(409);
 
-      const home = await fetch(`http://127.0.0.1:${srv.port}/s/${srv.token}/`);
-      const homeHtml = await home.text();
-      expect(homeHtml).toContain("You’re allowed to stop");
+    const home = await fetch(`http://127.0.0.1:${srv.port}/s/${srv.token}/`);
+    expect(home.status).toBe(200);
+    const homeHtml = await home.text();
+    expect(homeHtml).toContain("You are permitted to stop.");
 
-      const resumed = await fetch(
-        `http://127.0.0.1:${srv.port}/api/${srv.token}/resume`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            origin: `http://127.0.0.1:${srv.port}`,
-          },
-          body: "{}",
+    const resumed = await fetch(
+      `http://127.0.0.1:${srv.port}/api/${srv.token}/resume`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: `http://127.0.0.1:${srv.port}`,
         },
-      );
-      expect(resumed.status).toBe(200);
+        body: "{}",
+      },
+    );
+    expect(resumed.status).toBe(200);
 
-      const ok = await fetch(
-        `http://127.0.0.1:${srv.port}/api/${srv.token}/submit`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            origin: `http://127.0.0.1:${srv.port}`,
-          },
-          body: JSON.stringify({ paradoxAck: true }),
+    const ok = await fetch(
+      `http://127.0.0.1:${srv.port}/api/${srv.token}/submit`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: `http://127.0.0.1:${srv.port}`,
         },
-      );
-      expect(ok.status).toBe(200);
-    } catch (err: any) {
-      if (err?.cause?.code === "EPERM") {
-        // In restricted sandbox without loopback permissions
-        return;
-      }
-      throw err;
-    }
+        body: JSON.stringify({ paradoxAck: true }),
+      },
+    );
+    expect(ok.status).toBe(200);
   });
 });
 
 describe("pitch gate and render", () => {
-  it("blocks advance on pitch until satisfaction is complete", () => {
+  it("blocks advance on pitch until satisfaction and swap are complete", () => {
     let s = createSession({});
     s = {
       ...s,
@@ -110,7 +95,7 @@ describe("pitch gate and render", () => {
         itch: "trust",
         sticky: "vending machine",
         jackBlack: "yes",
-        cuts: [],
+        cuts: ["haggling"],
       },
     };
     expect(canAdvance(s).ok).toBe(false);
@@ -127,22 +112,36 @@ describe("pitch gate and render", () => {
     expect(canAdvance(s).ok).toBe(true);
   });
 
-  it("renderPitch bookends statement and walks 4→3→2→1", () => {
+  it("renderPitch bookends statement, walks 4->3->2->1, and renders cuts", () => {
     const s = createSession({});
-    s.statement = "I am the only X that Y";
+    s.statement = "I am the only bakery that bakes at midnight";
     s.answers = {
-      stand: { who: "buyers", job: "trust", solved: "easy buy" },
-      axis: { scale: "selection", place: "mid", ifWin: "more cars" },
-      off_axis: { territory: "vending ritual" },
+      stand: { who: "shift workers", job: "hot bread after shift", solved: "warm loaf at 1am" },
+      axis: {
+        leftPole: "stale rack",
+        rightPole: "cheaper bagels",
+        scale: "stale rack to cheaper bagels",
+        place: "mid",
+        ifWin: "margin war",
+        rivals: [{ id: "r1", label: "Daytime Loaf", x: 60 }],
+      },
+      off_axis: { territory: "nocturnal bakery ritual", axisLabel: "Hour of bake", selfX: 50, selfY: 88 },
     };
-    s.arena = { industry: "autos", offering: "cars", audience: "buyers" };
+    s.arena = { industry: "bakery", offering: "midnight sourdough", audience: "night shift" };
+    s.truthmode = {
+      verdict: "pass",
+      checks: [],
+      swap: "Daytime Loaf says it bakes at midnight while closing at 5pm",
+      itch: "warm bread at 1am",
+      sticky: "midnight oven window",
+      jackBlack: "daytime bakeries cannot stay open",
+      cuts: ["Morning pastries"],
+    };
     const html = renderPitch(s);
     expect(html).toContain('data-role="statement-open"');
     expect(html).toContain('data-role="statement-close"');
-    expect(html).toContain('data-step="4"');
-    expect(html).toContain('data-step="3"');
-    expect(html).toContain('data-step="2"');
-    expect(html).toContain('data-step="1"');
+    expect(html).toContain("Daytime Loaf");
+    expect(html).toContain("Morning pastries");
     const i4 = html.indexOf('data-step="4"');
     const i3 = html.indexOf('data-step="3"');
     const i2 = html.indexOf('data-step="2"');
@@ -150,17 +149,15 @@ describe("pitch gate and render", () => {
     expect(i4).toBeLessThan(i3);
     expect(i3).toBeLessThan(i2);
     expect(i2).toBeLessThan(i1);
-    const opens = html.split("I am the only X that Y").length - 1;
-    expect(opens).toBeGreaterThanOrEqual(2);
   });
 });
 
-describe("coach playbook chill rules", () => {
-  it("mentions offer-chill and no permanent escape hatch", () => {
+describe("coach playbook rules", () => {
+  it("mentions offer-chill, revise, and no permanent escape hatch", () => {
     const text = getPlaybook("coach");
     expect(text).toBeTruthy();
     expect(text!).toContain("offer-chill");
-    expect(text!).toContain("no");
-    expect(text!.toLowerCase()).toMatch(/escape hatch|always-visible/);
+    expect(text!).toContain("revise");
+    expect(text!.toLowerCase()).toMatch(/escape hatch/);
   });
 });

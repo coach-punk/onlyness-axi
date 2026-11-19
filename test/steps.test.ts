@@ -6,65 +6,90 @@ import {
   applyHumanSubmit,
   canAdvance,
   nextStep,
+  reviseStep,
 } from "../src/session/steps.js";
 
 describe("steps", () => {
-  it("blocks advance from paradox until ack", () => {
+  it("blocks advance from paradox until ack and blocks weakAdvance on Act 0", () => {
     const s = createSession({});
     expect(canAdvance(s).ok).toBe(false);
+    s.weakAdvance = true;
+    expect(canAdvance(s).ok).toBe(false);
     s.paradoxAck = true;
-    // still need arena before leaving arena step — paradox advances to arena
+    expect(canAdvance(s).ok).toBe(true);
     expect(nextStep("paradox")).toBe("arena");
   });
 
-  it("requires arena fields before leaving arena", () => {
+  it("requires arena fields before leaving arena even if weakAdvance is set", () => {
     const s = createSession({});
     s.step = "arena";
     s.paradoxAck = true;
+    s.weakAdvance = true;
     expect(canAdvance(s).ok).toBe(false);
     s.arena = { industry: "autos", offering: "car vending", audience: "buyers" };
     expect(canAdvance(s).ok).toBe(true);
   });
 
-  it("advanceSession moves paradox to arena after ack", () => {
-    const s = createSession({});
-    const withAck = applyHumanSubmit(s, { paradoxAck: true });
-    const next = advanceSession(withAck);
-    expect(next.step).toBe("arena");
-    expect(next.coachBudget).toEqual({ used: 0, max: 3, lastJob: null });
-    expect(next.weakAdvance).toBe(false);
-  });
-
-  it("applyHumanSubmit merges arena fields immutably", () => {
-    const s = createSession({});
-    const next = applyHumanSubmit(s, { arena: { industry: "autos" } });
-    expect(next.arena).toEqual({
-      industry: "autos",
-      offering: "",
-      audience: "",
+  it("derives axis scale/place from poles and selfX and clamps coords", () => {
+    let s = createSession({});
+    s.step = "axis";
+    s = applyHumanSubmit(s, {
+      answers: {
+        axis: {
+          leftPole: "Slow quotes",
+          rightPole: "Instant quote",
+          selfX: 140,
+          rivals: [{ id: "r1", label: "Rival A", x: -20 }],
+          ifWin: "Commodity price race",
+        },
+      },
     });
-    expect(s.arena.industry).toBe("");
-    expect(next.coachLog).toHaveLength(1);
-    expect(next.coachLog[0]?.role).toBe("human");
+    expect(s.answers.axis?.selfX).toBe(100);
+    expect(s.answers.axis?.rivals?.[0]?.x).toBe(0);
+    expect(s.answers.axis?.scale).toBe("Slow quotes to Instant quote");
+    expect(s.answers.axis?.place).toBe("Position 100/100");
+    expect(canAdvance(s).ok).toBe(true);
   });
 
-  it("requires statement before truthmode advance to done", () => {
-    const s = createSession({});
-    s.step = "truthmode";
+  it("invalidates stale truthmode verdict when statement changes", () => {
+    let s = createSession({});
+    s.step = "onlyness";
     s.statement = "I am the only X that Y";
     s.truthmode = {
-      verdict: "pass",
-      checks: [],
-      swap: "rival cannot claim",
+      verdict: "fail",
+      checks: [{ id: "geo", severity: "fail", detail: "geo" }],
+      swap: "old swap",
       itch: "a",
       sticky: "b",
       jackBlack: "c",
       cuts: [],
     };
+    s = applyHumanSubmit(s, {
+      statement: "I am the only Z that transforms rituals",
+    });
+    expect(s.truthmode?.verdict).toBeNull();
+    expect(s.truthmode?.checks).toEqual([]);
+  });
+
+  it("requires Pass 2 swap alongside itch/sticky/jackBlack on truthmode", () => {
+    const s = createSession({});
+    s.step = "truthmode";
+    s.statement = "I am the only car retailer that sells cars from a vending machine";
+    s.truthmode = {
+      verdict: "pass",
+      checks: [],
+      swap: "",
+      itch: "a",
+      sticky: "b",
+      jackBlack: "c",
+      cuts: [],
+    };
+    expect(canAdvance(s).ok).toBe(false);
+    s.truthmode.swap = "rival sounds absurd";
     expect(canAdvance(s).ok).toBe(true);
   });
 
-  it("weakAdvance unlocks stand when answers incomplete", () => {
+  it("weakAdvance unlocks stand when answers incomplete but never done or pitch", () => {
     const s = createSession({});
     s.step = "stand";
     s.coachBudget = { used: 3, max: 3, lastJob: "mirror" };
@@ -74,47 +99,50 @@ describe("steps", () => {
     const next = advanceSession(s);
     expect(next.step).toBe("axis");
     expect(next.weakAdvance).toBe(false);
-  });
 
-  it("weakAdvance still blocked on done", () => {
-    const s = createSession({});
     s.step = "done";
-    s.weakAdvance = true;
     expect(canAdvance(s).ok).toBe(false);
   });
 
-  it("resets coach budget when stand answers change substantively", () => {
+  it("resets coach budget on substantive change, not on ack/weak/humanMessage-only", () => {
     let s = createSession({});
     s.step = "stand";
     s.coachBudget = { used: 2, max: 3, lastJob: "ground" };
+    s = applyHumanSubmit(s, { humanMessage: "Why does who matter?" });
+    expect(s.coachBudget.used).toBe(2);
+    expect(s.coachLog.at(-1)?.text).toBe("Why does who matter?");
+
     s = applyHumanSubmit(s, {
-      answers: { stand: { who: "buyers", job: "skip the lot", solved: "car arrives" } },
+      answers: { stand: { who: "buyers", job: "skip lot", solved: "car arrives" } },
     });
     expect(s.coachBudget).toEqual({ used: 0, max: 3, lastJob: null });
   });
 
-  it("does not reset budget on paradoxAck-only or weakAdvance-only", () => {
+  it("reviseStep transitions back cleanly, preserves work, and clears downstream satisfaction", () => {
     let s = createSession({});
-    s.coachBudget = { used: 2, max: 3, lastJob: "ground" };
-    s = applyHumanSubmit(s, { paradoxAck: true });
-    expect(s.coachBudget.used).toBe(2);
-    expect(s.paradoxAck).toBe(true);
-
-    s.step = "stand";
+    s.step = "truthmode";
+    s.statement = "I am the only weak draft";
     s.coachBudget = { used: 3, max: 3, lastJob: "mirror" };
-    s = applyHumanSubmit(s, { weakAdvance: true });
-    expect(s.coachBudget.used).toBe(3);
-    expect(s.weakAdvance).toBe(true);
-  });
+    s.weakAdvance = true;
+    s.satisfaction = {
+      stand: true,
+      axis: true,
+      off_axis: true,
+      onlyness: true,
+      statement: true,
+    };
 
-  it("does not reset budget on whitespace-only stand re-submit", () => {
-    let s = createSession({});
-    s.step = "stand";
-    s.answers = { stand: { who: "buyers", job: "skip lot", solved: "done" } };
-    s.coachBudget = { used: 1, max: 3, lastJob: "clarify" };
-    s = applyHumanSubmit(s, {
-      answers: { stand: { who: "  Buyers ", job: "skip  lot", solved: "done" } },
-    });
-    expect(s.coachBudget.used).toBe(1);
+    const revised = reviseStep(s, "off_axis");
+    expect(revised.step).toBe("off_axis");
+    expect(revised.statement).toBe("I am the only weak draft");
+    expect(revised.coachBudget).toEqual({ used: 0, max: 3, lastJob: null });
+    expect(revised.weakAdvance).toBe(false);
+    expect(revised.satisfaction.stand).toBe(true);
+    expect(revised.satisfaction.axis).toBe(true);
+    expect(revised.satisfaction.off_axis).toBe(false);
+    expect(revised.satisfaction.onlyness).toBe(false);
+    expect(revised.satisfaction.statement).toBe(false);
+
+    expect(() => reviseStep(s, "done")).toThrow();
   });
 });

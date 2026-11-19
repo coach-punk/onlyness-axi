@@ -3,8 +3,14 @@ import { AxiError } from "../output/errors.js";
 import { emitBlock, emitKV, print } from "../output/toon.js";
 import { advanceSession } from "../session/steps.js";
 import { saveSession } from "../session/store.js";
-import { generatePitch, pitchUrl } from "./pitch.js";
-import { requireSession, root, writeSurfaceFile } from "./session-io.js";
+import { generatePitch, pitchFileExists } from "./pitch.js";
+import {
+  pitchFilePath,
+  requireSession,
+  root,
+  workshopFilePath,
+  writeWorkshopFile,
+} from "./session-io.js";
 
 export const advanceCommand: CommandModule = {
   spec: {
@@ -27,6 +33,12 @@ export const advanceCommand: CommandModule = {
         `onlyness-axi resume ${id} before advancing`,
       );
     }
+    if (session.status === "ended") {
+      throw new AxiError(
+        "session already ended",
+        "start a new session with onlyness-axi start",
+      );
+    }
 
     const fromStep = session.step;
 
@@ -36,25 +48,21 @@ export const advanceCommand: CommandModule = {
       const message = err instanceof Error ? err.message : String(err);
       throw new AxiError(
         message,
-        `fill the current step, then retry: onlyness-axi advance ${id}`,
+        `fill the current step (or revise earlier steps), then retry: onlyness-axi advance ${id}`,
       );
     }
 
     saveSession(rootDir, session);
-    writeSurfaceFile(session);
+    const workshopFile = writeWorkshopFile(session, rootDir);
 
-    let pitch = "";
+    let pitchFile = pitchFileExists(id) ? pitchFilePath(id) : "";
     if (fromStep === "pitch" && session.step === "done") {
       try {
-        generatePitch(id);
-        session = requireSession(id);
-        pitch = pitchUrl(session.port);
+        const res = generatePitch(id);
+        pitchFile = res.path;
       } catch {
         // Gate already passed; regenerate best-effort for deliverable.
       }
-    }
-    if (session.step === "pitch") {
-      // Landing on pitch step: surface checklist; pitch file after satisfaction.
     }
 
     const playbookId =
@@ -68,18 +76,19 @@ export const advanceCommand: CommandModule = {
       emitKV([
         ["session", session.id],
         ["step", session.step],
-        ["coachBudgetUsed", session.coachBudget.used],
-        ["pitchUrl", pitch],
+        ["coachBudgetUsed", `${session.coachBudget.used}/${session.coachBudget.max}`],
+        ["workshopFile", workshopFile],
+        ["pitchFile", pitchFile],
       ]),
     );
     print(
       emitBlock("next", [
         session.step === "pitch"
-          ? "1. Confirm satisfaction on surface, then onlyness-axi pitch " + id
+          ? `1. Confirm satisfaction, then run: onlyness-axi pitch ${id}`
           : `1. onlyness-axi playbook ${playbookId}`,
-        pitch
-          ? `2. Open pitch ${pitch}`
-          : `2. onlyness-axi poll ${session.id}`,
+        pitchFile
+          ? `2. Open ${pitchFile}`
+          : `2. onlyness-axi status ${session.id}`,
       ]),
     );
     return 0;

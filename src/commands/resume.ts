@@ -1,12 +1,14 @@
-import { writeFileSync } from "node:fs";
-import { join } from "node:path";
 import type { CommandModule } from "../cli/router.js";
 import { AxiError } from "../output/errors.js";
 import { emitBlock, emitKV, print } from "../output/toon.js";
-import { loadSession, saveSession, sessionDir } from "../session/store.js";
+import { loadSession, saveSession } from "../session/store.js";
 import type { Session } from "../session/types.js";
-import { renderSurface } from "../surface/template.js";
-import { requireSession, root } from "./session-io.js";
+import {
+  requireSession,
+  root,
+  workshopFilePath,
+  writeWorkshopFile,
+} from "./session-io.js";
 
 export function resumeSession(rootDir: string, sessionId: string): Session {
   let session: Session;
@@ -24,8 +26,9 @@ export function resumeSession(rootDir: string, sessionId: string): Session {
       "start a new session with onlyness-axi start",
     );
   }
+  const { chillReason: _dropped, ...rest } = session;
   session = {
-    ...session,
+    ...rest,
     status: "active",
     chillOfferedAt: null,
     coachLog: [
@@ -39,17 +42,14 @@ export function resumeSession(rootDir: string, sessionId: string): Session {
     ],
   };
   saveSession(rootDir, session);
-  writeFileSync(
-    join(sessionDir(rootDir, session.id), "surface.html"),
-    renderSurface(session),
-  );
+  writeWorkshopFile(session, rootDir);
   return session;
 }
 
 export const resumeCommand: CommandModule = {
   spec: {
     name: "resume",
-    summary: "Unpause a chilled session and restore the workshop surface",
+    summary: "Unpause a chilled session and restore the workshop canvas",
     args: [
       { name: "session", required: true, description: "session id" },
     ],
@@ -60,17 +60,21 @@ export const resumeCommand: CommandModule = {
     const id = parsed.positionals[0]!;
     requireSession(id);
     const session = resumeSession(root(), id);
+    const playbookId =
+      session.step === "off_axis" ? "off-axis" : session.step;
+
     print(
       emitKV([
         ["session", session.id],
         ["status", session.status],
         ["step", session.step],
+        ["workshopFile", workshopFilePath(session.id)],
       ]),
     );
     print(
       emitBlock("next", [
-        `1. onlyness-axi poll ${session.id}`,
-        `2. onlyness-axi playbook ${session.step === "off_axis" ? "off-axis" : session.step}`,
+        `1. onlyness-axi status ${session.id}`,
+        `2. onlyness-axi playbook ${playbookId}`,
       ]),
     );
     return 0;

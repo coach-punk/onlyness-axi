@@ -7,8 +7,8 @@ export function print(text: string): void {
 
 export function toonValue(value: unknown): string {
   if (value === null || value === undefined) return "";
-  const s = String(value);
-  if (/[,"\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  const s = String(value).replace(/\r?\n/g, " ");
+  if (/[,"]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
   return s;
 }
 
@@ -36,11 +36,19 @@ export function emitList(
 
 /** A named block of pre-formatted lines, e.g. help[2]: or next[3]:. */
 export function emitBlock(name: string, lines: string[]): string {
-  return [`${name}[${lines.length}]:`, ...lines.map((l) => "  " + l)].join("\n");
+  return [
+    `${name}[${lines.length}]:`,
+    ...lines.map((l) => "  " + String(l).replace(/\r?\n/g, " ")),
+  ].join("\n");
 }
 
 export function emitKV(pairs: Array<[string, unknown]>): string {
-  return pairs.map(([k, v]) => `${k}: ${toonValue(v) === "" ? "" : String(v)}`.trimEnd()).join("\n");
+  return pairs
+    .map(([k, v]) => {
+      const formatted = toonValue(v);
+      return formatted === "" ? `${k}:` : `${k}: ${formatted}`;
+    })
+    .join("\n");
 }
 
 /**

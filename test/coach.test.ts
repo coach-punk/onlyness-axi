@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  coachJobGuidance,
   consumeCoachTurn,
   nextCoachJob,
   resetBudgetIfAnswerChanged,
   substantiveChanged,
 } from "../src/session/coach.js";
+import { STEP_ORDER } from "../src/session/steps.js";
 import { createSession } from "../src/session/store.js";
 
-describe("coach budget", () => {
-  it("orders clarify → ground → mirror then exhausts", () => {
+describe("coach budget and guidance", () => {
+  it("orders clarify -> ground -> mirror then exhausts", () => {
     expect(nextCoachJob(0)).toBe("clarify");
     expect(nextCoachJob(1)).toBe("ground");
     expect(nextCoachJob(2)).toBe("mirror");
@@ -34,5 +36,14 @@ describe("coach budget", () => {
     s.coachBudget = { used: 2, max: 3, lastJob: "ground" };
     s = resetBudgetIfAnswerChanged(s, "same", "  Same ");
     expect(s.coachBudget.used).toBe(2);
+  });
+
+  it("provides guidance for every step and job state", () => {
+    for (const step of STEP_ORDER) {
+      for (const job of ["clarify", "ground", "mirror", null] as const) {
+        const line = coachJobGuidance(step, job);
+        expect(line.trim().length).toBeGreaterThan(15);
+      }
+    }
   });
 });

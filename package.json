@@ -1,7 +1,7 @@
 {
   "name": "onlyness-axi",
-  "version": "0.2.1",
-  "description": "Local-first AXI workshop: Pepsi Paradox → onlyness statement → truthmode.",
+  "version": "0.3.0",
+  "description": "Local-first narrated spatial AXI workshop: Pepsi Paradox → 2D off-axis map → onlyness statement → truthmode.",
   "type": "module",
   "license": "MIT",
   "bin": {

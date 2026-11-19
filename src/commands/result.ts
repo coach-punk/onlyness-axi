@@ -1,23 +1,58 @@
 import type { CommandModule } from "../cli/router.js";
 import { emitBlock, emitKV, emitList, print } from "../output/toon.js";
-import { pitchFileExists, pitchUrl } from "./pitch.js";
-import { requireSession } from "./session-io.js";
+import { truncate, truncationNote } from "../output/truncate.js";
+import type { AxisAnswer, OffAxisAnswer } from "../session/types.js";
+import { pitchFileExists } from "./pitch.js";
+import {
+  pitchFilePath,
+  requireSession,
+  workshopFilePath,
+} from "./session-io.js";
 
 export const resultCommand: CommandModule = {
   spec: {
     name: "result",
-    summary: "Emit worksheet KV for answers, statement, and truthmode",
+    summary: "Emit worksheet KV for answers, spatial map, statement, and truthmode",
     args: [
       { name: "session", required: true, description: "session id" },
     ],
-    flags: [],
-    examples: ["onlyness-axi result s-2026-…"],
+    flags: [
+      {
+        name: "full",
+        type: "boolean",
+        default: false,
+        description: "disable truncation on long fields",
+      },
+    ],
+    examples: [
+      "onlyness-axi result s-2026-…",
+      "onlyness-axi result s-2026-… --full",
+    ],
   },
   run(parsed) {
     const session = requireSession(parsed.positionals[0]);
+    const full = Boolean(parsed.flags["full"]);
     const t = session.truthmode;
     const hasPitch = pitchFileExists(session.id);
-    const url = hasPitch ? pitchUrl(session.port) : "";
+    const axis = (session.answers.axis ?? {}) as Partial<AxisAnswer>;
+    const offAxis = (session.answers.off_axis ?? {}) as Partial<OffAxisAnswer>;
+
+    const maybeTrunc = (val: string, limit = 240): string => {
+      if (full || val.length <= limit) return val;
+      const res = truncate(val, limit);
+      return `${res.text}... (${res.totalChars} chars)`;
+    };
+
+    const rivalsSummary = Array.isArray(axis.rivals)
+      ? axis.rivals.map((r) => `${r.label}@${r.x}`).join("; ")
+      : "";
+    const offSummary = offAxis.territory
+      ? `${offAxis.axisLabel ? `${offAxis.axisLabel}: ` : ""}${offAxis.territory} (${offAxis.selfX ?? 50},${offAxis.selfY ?? 50})`
+      : "";
+    const answersJson = JSON.stringify(session.answers);
+    const answersOut = full
+      ? { text: answersJson, truncated: false, totalChars: answersJson.length }
+      : truncate(answersJson, 800);
 
     print(
       emitKV([
@@ -25,24 +60,28 @@ export const resultCommand: CommandModule = {
         ["status", session.status],
         ["entry", session.entry],
         ["step", session.step],
+        ["contextSources", session.contextSources.join(",")],
         ["industry", session.arena.industry],
         ["offering", session.arena.offering],
         ["audience", session.arena.audience],
-        ["statement", session.statement],
+        ["rivals", rivalsSummary],
+        ["offAxis", maybeTrunc(offSummary)],
+        ["statement", maybeTrunc(session.statement, 400)],
         ["verdict", t?.verdict ?? ""],
-        ["swap", t?.swap ?? ""],
-        ["itch", t?.itch ?? ""],
-        ["sticky", t?.sticky ?? ""],
-        ["jackBlack", t?.jackBlack ?? ""],
-        ["pitchUrl", url],
+        ["swap", maybeTrunc(t?.swap ?? "")],
+        ["itch", maybeTrunc(t?.itch ?? "")],
+        ["sticky", maybeTrunc(t?.sticky ?? "")],
+        ["jackBlack", maybeTrunc(t?.jackBlack ?? "")],
+        ["workshopFile", workshopFilePath(session.id)],
+        ["pitchFile", hasPitch ? pitchFilePath(session.id) : ""],
       ]),
     );
 
-    print(
-      emitBlock("answers", [
-        JSON.stringify(session.answers),
-      ]),
-    );
+    const answerLines = [answersOut.text];
+    if (answersOut.truncated) {
+      answerLines.push(`${truncationNote(answersOut).trim()} (pass --full)`);
+    }
+    print(emitBlock("answers", answerLines));
 
     if (t && t.checks.length > 0) {
       print(

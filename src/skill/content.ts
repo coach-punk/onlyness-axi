@@ -3,19 +3,19 @@
 // `npm run skill:gen` and CI fails if it drifts (`npm run skill:check`).
 
 import { homedir } from "node:os";
-import { emitList } from "../output/toon.js";
 import { helpBlock } from "../output/suggest.js";
+import { emitList } from "../output/toon.js";
 
 /** Short line for CLI home / --help headers. */
 export const DESCRIPTION =
-  "Local-first workshop: Pepsi Paradox → onlyness statement → truthmode";
+  "Local-first narrated spatial workshop: Pepsi Paradox → 2D off-axis map → onlyness → truthmode";
 
 /**
  * Agent Skills frontmatter description — when to use + hard rules.
  * Keep this the discovery surface; playbook text lives in the CLI.
  */
 export const SKILL_DESCRIPTION =
-  "Use when positioning, USP stuckness, Pepsi Paradox framing, feature-creep prune, or drafting an onlyness statement. Gather mutual context first; run via npx -y onlyness-axi; fetch playbooks from the CLI; coach ≤3 turns/step (clarify → ground → mirror); offer chill (reply --offer-chill) only when hostile/stuck — no permanent escape hatch; pitch.html is the philosophy deliverable after satisfaction; never skip Act 0 or truthmode.";
+  "Use when positioning, USP stuckness, Pepsi Paradox framing, feature-creep prune, or drafting an onlyness statement. Gather mutual context first and prefill; run statelessly via npx -y onlyness-axi; fetch playbooks from the CLI; coach ≤3 turns/step (clarify → ground → mirror); revise backwards via revise on weak/fail truthmode; offer chill (coach --offer-chill) only when hostile/stuck; pitch.html is the philosophy deliverable after satisfaction; never skip Act 0 or truthmode.";
 
 export const SPEC_VERSION = "axi/1.0-2026-07";
 
@@ -27,28 +27,29 @@ export function collapseHome(path: string): string {
 /**
  * Shared body of the home view; `tool` is how commands are written
  * ("onlyness-axi" live, "npx -y onlyness-axi" in the static skill).
- *
- * Live session listing is handled in commands/home.ts; this static body
- * is for SKILL.md discovery (AXI principle 7).
  */
 export function homeBody(tool: string): string {
   const table = emitList(
     "commands",
     [
-      { command: `${tool} start`, summary: "Create session + open surface" },
-      { command: `${tool} serve <id>`, summary: "Long-lived HTTP surface daemon" },
-      { command: `${tool} poll <id>`, summary: "Long-poll human events" },
-      { command: `${tool} reply <id>`, summary: "Post coach message to surface" },
-      { command: `${tool} advance <id>`, summary: "Move to next step when gated" },
-      { command: `${tool} playbook <playbook-id>`, summary: "Fetch step / coach / prune / pitch guidance" },
+      { command: `${tool} start`, summary: "Create session + standalone workshop.html" },
+      { command: `${tool} status <id>`, summary: "Inspect step, gate, coach job, and answers" },
+      { command: `${tool} prefill <id>`, summary: "Prefill arena, contextSources, and specimen" },
+      { command: `${tool} submit <id>`, summary: "Apply human submission or chat answer JSON" },
+      { command: `${tool} coach <id>`, summary: "Post coach or system message (alias: reply)" },
+      { command: `${tool} advance <id>`, summary: "Move to next step when gate is satisfied" },
+      { command: `${tool} revise <id> <step>`, summary: "Step back to revise without losing work" },
       { command: `${tool} truthmode check <id>`, summary: "Run Pass 1 rubric" },
       { command: `${tool} truthmode set-swap <id>`, summary: "Record Pass 2 adversarial swap (--text)" },
       { command: `${tool} pitch <id>`, summary: "Generate reverse-walk pitch.html deliverable" },
       { command: `${tool} chill <id>`, summary: "Pause workshop (after coach offers break)" },
       { command: `${tool} resume <id>`, summary: "Unpause after chill" },
-      { command: `${tool} result <id>`, summary: "Worksheet + statement + truthmode + pitchUrl" },
-      { command: `${tool} end <id>`, summary: "End session; close idle servers" },
-      { command: `${tool} list`, summary: "List active workshop sessions" },
+      { command: `${tool} view <id>`, summary: "Open optional live SSE browser sync server" },
+      { command: `${tool} result <id>`, summary: "Worksheet + statement + truthmode + pitchFile" },
+      { command: `${tool} end <id>`, summary: "End session" },
+      { command: `${tool} playbook <playbook-id>`, summary: "Fetch step / coach / prune / pitch guidance" },
+      { command: `${tool} list`, summary: "List active and paused sessions" },
+      { command: `${tool} init`, summary: "Write onlyness-axi discovery block to AGENTS.md" },
     ],
     ["command", "summary"],
   );
@@ -70,19 +71,23 @@ export function rootHelpText(): string {
   const commands = emitList(
     "commands",
     [
-      { command: "list", summary: "List active workshop sessions" },
-      { command: "start", summary: "Create session, surface, and local server" },
-      { command: "serve", summary: "Run long-lived HTTP surface + event bus" },
-      { command: "poll", summary: "Long-poll human submit / need-coach events" },
-      { command: "reply", summary: "Post coach or system message (--offer-chill)" },
+      { command: "list", summary: "List active and paused workshop sessions" },
+      { command: "start", summary: "Create session and standalone workshop.html" },
+      { command: "status", summary: "Inspect step, gate, coach job, and answers" },
+      { command: "prefill", summary: "Prefill arena, contextSources, and specimen" },
+      { command: "submit", summary: "Relay human submission JSON (headless/chat)" },
+      { command: "coach", summary: "Post coach or system message (alias: reply)" },
       { command: "advance", summary: "Move to next step when gate is ready" },
+      { command: "revise", summary: "Step back to revise earlier steps safely" },
+      { command: "truthmode", summary: "Rubric check or store Pass 2 swap" },
       { command: "pitch", summary: "Generate reverse-walk pitch.html deliverable" },
       { command: "chill", summary: "Pause workshop for a human break" },
       { command: "resume", summary: "Unpause after chill" },
-      { command: "result", summary: "Emit worksheet + statement + truthmode + pitchUrl" },
-      { command: "end", summary: "End session; close idle servers" },
+      { command: "view", summary: "Optional live SSE sync server for workshop.html" },
+      { command: "result", summary: "Emit worksheet + statement + truthmode + pitchFile" },
+      { command: "end", summary: "Mark session ended" },
       { command: "playbook", summary: "On-demand step / coach / pitch / prune guidance" },
-      { command: "truthmode", summary: "Rubric check or store Pass 2 swap" },
+      { command: "init", summary: "Write AGENTS.md discovery block" },
     ],
     ["command", "summary"],
   );
@@ -100,7 +105,7 @@ export function rootHelpText(): string {
     flags,
     "examples[3]:",
     "  onlyness-axi start --entry blank",
-    "  onlyness-axi poll s-…",
+    "  onlyness-axi status s-…",
     "  onlyness-axi playbook paradox",
   ].join("\n");
 }
@@ -112,11 +117,11 @@ function skillRules(): string {
     "",
     "Positioning, USP stuckness, Pepsi Paradox teaching, feature-creep prune, or drafting `I am the only ______ that ______`.",
     "",
-    "## How to run",
+    "## How to run (stateless AXI loop)",
     "",
-    "- Invoke with `npx -y onlyness-axi` (no global install).",
-    "- **Interaction loop**: `start` (opens browser surface) → loop `poll <id>` for human submit/coach requests → coach via `reply <id> --text \"…\"` → `advance <id>` when gate is ready.",
-    "- Before `start` / during Act 0: gather **mutual context** (chat, memory tools if present, prior `.onlyness/` sessions, seed) and prefill arena / pick a fitting worked example.",
+    "- Invoke with `npx -y onlyness-axi` (no global install, no blocking poll loops).",
+    "- **Interaction loop**: `start` (generates standalone `workshop.html` with interactive spatial canvas + British narrator) → gather **mutual context** and `prefill` arena → inspect via `status <id>` or relay chat answers via `submit <id> --json '…'` → coach via `coach <id> --text \"…\"` → `advance <id>` when gate ready (or `revise <id> <step>` to step back).",
+    "- Optional live browser sync: run `view <id>` when the human wants real-time SSE updates without refreshing `workshop.html`.",
     "- Fetch guidance on demand: `playbook <playbook-id>` (`paradox`, `arena`, `stand`, `axis`, `off-axis`, `onlyness`, `truthmode`, `pitch`, `prune`, `coach`). Do not paste stale playbooks into this skill.",
     "",
     "## Coach budget (per step)",
@@ -127,20 +132,20 @@ function skillRules(): string {
     "2. **Ground** — reframe with their arena / mutual context",
     "3. **Mirror** — adversarial “a rival could say the same…”",
     "",
-    "Do not burn budget on generic lectures when arena is empty — fill arena first. Prefer send-back over pep talk on weak/fail truthmode.",
+    "Do not burn budget on generic lectures when arena is empty — prefill arena first. Prefer `revise <id> off_axis` / `onlyness` over pep talk on weak/fail truthmode.",
     "",
     "## Chill (agent-only)",
     "",
-    "No permanent escape hatch. If the human is hostile, shame-spiraling, or forcing more turns will make it worse: **one** offer via `reply --system --offer-chill --text \"…\"` (no budget burn). Accept → `chill` / surface Accept break; later `resume`. Do not nag if declined.",
+    "No permanent escape hatch. If the human is hostile, shame-spiraling, or forcing more turns will make it worse: **one** offer via `coach <id> --system --offer-chill --text \"…\"` (no budget burn). Accept → `chill <id>`; later `resume <id>`. Do not nag if declined.",
     "",
     "## Pitch deliverable",
     "",
-    "After truthmode, land on `pitch` step. When they confirm satisfaction with stand/axis/off-axis/onlyness/statement, run `pitch <id>` and open `/pitch` — reverse walk 4→3→2→1 bookended by the statement. That page is the philosophy deliverable, not a tech stack.",
+    "After truthmode (with Pass 2 `set-swap` recorded), land on `pitch` step. When they confirm satisfaction with stand/axis/off-axis/onlyness/statement, run `pitch <id>` and open `pitch.html` — reverse walk 4→3→2→1 plotted on their 2D spatial map, bookended by the statement.",
     "",
     "## Hard rules",
     "",
-    "- **Never skip Act 0** (Pepsi Paradox ack + arena + worked example) before Step 1.",
-    "- **Never skip truthmode** after a drafted onlyness statement.",
+    "- **Never skip Act 0** (Pepsi Paradox ack + arena + worked example) before Step 1 (`weakAdvance` cannot bypass Act 0).",
+    "- **Never skip truthmode** (`check` + `set-swap`) after a drafted onlyness statement.",
   ].join("\n");
 }
 
