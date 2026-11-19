@@ -273,6 +273,7 @@ ${workshopCss()}
         </label>
         <div class="actions-row">
           <button type="button" class="btn--primary" id="btn-submit-paradox">Save acknowledgment</button>
+          <button type="button" class="btn--secondary${isLive ? "" : " hidden"}" id="btn-next-paradox">Next step</button>
         </div>
       </section>
 
@@ -308,6 +309,7 @@ ${workshopCss()}
 
         <div class="actions-row">
           <button type="button" class="btn--primary" id="btn-submit-arena">Save arena</button>
+          <button type="button" class="btn--secondary${isLive ? "" : " hidden"}" id="btn-next-arena">Next step</button>
         </div>
       </section>
 
@@ -334,6 +336,7 @@ ${workshopCss()}
         </div>
         <div class="actions-row">
           <button type="button" class="btn--primary" id="btn-submit-stand">Save stand</button>
+          <button type="button" class="btn--secondary${isLive ? "" : " hidden"}" id="btn-next-stand">Next step</button>
         </div>
       </section>
 
@@ -383,6 +386,7 @@ ${workshopCss()}
 
         <div class="actions-row">
           <button type="button" class="btn--primary" id="btn-submit-axis">Save axis</button>
+          <button type="button" class="btn--secondary${isLive ? "" : " hidden"}" id="btn-next-axis">Next step</button>
           <button type="button" class="btn--ghost" id="btn-revise-from-axis-to-stand">Revise stand</button>
         </div>
       </section>
@@ -425,6 +429,7 @@ ${workshopCss()}
 
         <div class="actions-row">
           <button type="button" class="btn--primary" id="btn-submit-off">Save off-axis leap</button>
+          <button type="button" class="btn--secondary${isLive ? "" : " hidden"}" id="btn-next-off-axis">Next step</button>
           <button type="button" class="btn--ghost" id="btn-revise-from-off-to-axis">Revise axis</button>
         </div>
       </section>
@@ -477,6 +482,7 @@ ${workshopCss()}
 
         <div class="actions-row">
           <button type="button" class="btn--primary" id="btn-submit-statement">Save statement</button>
+          <button type="button" class="btn--secondary${isLive ? "" : " hidden"}" id="btn-next-onlyness">Next step</button>
           <button type="button" class="btn--ghost" id="btn-revise-from-only-to-off">Revise off-axis</button>
         </div>
       </section>
@@ -529,6 +535,7 @@ ${workshopCss()}
 
         <div class="actions-row">
           <button type="button" class="btn--primary" id="btn-submit-truthmode">Save truthmode</button>
+          <button type="button" class="btn--secondary${isLive ? "" : " hidden"}" id="btn-next-truthmode">Next step</button>
           <button type="button" class="btn--secondary" id="btn-revise-off-axis">Revise off-axis</button>
           <button type="button" class="btn--secondary" id="btn-revise-statement">Revise statement</button>
         </div>
@@ -550,6 +557,7 @@ ${workshopCss()}
         </div>
         <div class="actions-row">
           <button type="button" class="btn--primary" id="btn-submit-satisfaction">Save satisfaction</button>
+          <button type="button" class="btn--secondary${isLive ? "" : " hidden"}" id="btn-next-pitch">Next step</button>
           <button type="button" class="btn--secondary" id="btn-revise-from-pitch">Revise statement</button>
         </div>
       </section>
@@ -747,7 +755,7 @@ ${narratorClientScript()}
     });
   }
 
-  function submitPayload(payload, stepKeysToClear, okMsg) {
+  function submitPayload(payload, stepKeysToClear, okMsg, rethrow) {
     saveDraftLocal();
     if (Array.isArray(stepKeysToClear)) {
       stepKeysToClear.forEach(function (k) { delete dirtyFields[k]; });
@@ -771,6 +779,7 @@ ${narratorClientScript()}
       })
       .catch(function (e) {
         setStatus(String(e && e.message ? e.message : e));
+        if (rethrow) throw e;
       });
   }
 
@@ -1348,95 +1357,156 @@ ${narratorClientScript()}
     });
   });
 
-  // Step submit button bindings
+  // Step submit & advance bindings
   function bindClick(id, fn) {
     var node = el(id);
     if (node) node.addEventListener("click", fn);
   }
 
-  bindClick("btn-submit-paradox", function () {
-    var ack = el("paradoxAck");
-    submitPayload({ paradoxAck: !!(ack && ack.checked), paradoxRevealed: true }, ["paradoxAck"], "Paradox acknowledgment saved.");
-  });
-
-  bindClick("btn-submit-arena", function () {
-    submitPayload({
-      arena: {
-        industry: val("arena-industry"),
-        offering: val("arena-offering"),
-        audience: val("arena-audience")
-      }
-    }, ["arena-industry", "arena-offering", "arena-audience"], "Arena saved.");
-  });
-
-  bindClick("btn-submit-stand", function () {
-    submitPayload({
-      answers: {
-        stand: {
-          who: val("stand-who"),
-          job: val("stand-job"),
-          solved: val("stand-solved")
+  function stepSpec(stepId) {
+    if (stepId === "paradox") {
+      var ack = el("paradoxAck");
+      return {
+        payload: { paradoxAck: !!(ack && ack.checked), paradoxRevealed: true },
+        clear: ["paradoxAck"],
+        msg: "Paradox acknowledgment saved."
+      };
+    }
+    if (stepId === "arena") {
+      return {
+        payload: {
+          arena: {
+            industry: val("arena-industry"),
+            offering: val("arena-offering"),
+            audience: val("arena-audience")
+          }
+        },
+        clear: ["arena-industry", "arena-offering", "arena-audience"],
+        msg: "Arena saved."
+      };
+    }
+    if (stepId === "stand") {
+      return {
+        payload: {
+          answers: {
+            stand: {
+              who: val("stand-who"),
+              job: val("stand-job"),
+              solved: val("stand-solved")
+            }
+          }
+        },
+        clear: ["stand-who", "stand-job", "stand-solved"],
+        msg: "Stand saved."
+      };
+    }
+    if (stepId === "axis") {
+      var left = val("axis-left-pole").trim();
+      var right = val("axis-right-pole").trim();
+      return {
+        payload: {
+          answers: {
+            axis: {
+              leftPole: left,
+              rightPole: right,
+              scale: left && right ? left + " to " + right : (left || right),
+              selfX: axisSelfX,
+              place: "Position " + axisSelfX + "/100",
+              rivals: rivals,
+              ifWin: val("axis-if-win")
+            }
+          }
+        },
+        clear: ["axis-left-pole", "axis-right-pole", "axis-if-win", "axis-selfX", "axis-rivals"],
+        msg: "Axis saved."
+      };
+    }
+    if (stepId === "off_axis") {
+      return {
+        payload: {
+          answers: {
+            off_axis: {
+              axisLabel: val("off-axis-label"),
+              territory: val("off-territory"),
+              selfX: offSelfX,
+              selfY: offSelfY
+            }
+          }
+        },
+        clear: ["off-axis-label", "off-territory", "off-coords"],
+        msg: "Off-axis leap saved."
+      };
+    }
+    if (stepId === "onlyness") {
+      return {
+        payload: { statement: val("statement") },
+        clear: ["statement"],
+        msg: "Statement saved."
+      };
+    }
+    if (stepId === "truthmode") {
+      return {
+        payload: {
+          truthmode: {
+            itch: val("tm-itch"),
+            sticky: val("tm-sticky"),
+            jackBlack: val("tm-jack"),
+            cuts: cuts
+          }
+        },
+        clear: ["tm-itch", "tm-sticky", "tm-jack", "tm-cuts"],
+        msg: "Truthmode fields saved."
+      };
+    }
+    return {
+      payload: {
+        satisfaction: {
+          stand: !!(el("sat-stand") && el("sat-stand").checked),
+          axis: !!(el("sat-axis") && el("sat-axis").checked),
+          off_axis: !!(el("sat-off") && el("sat-off").checked),
+          onlyness: !!(el("sat-only") && el("sat-only").checked),
+          statement: !!(el("sat-stmt") && el("sat-stmt").checked)
         }
-      }
-    }, ["stand-who", "stand-job", "stand-solved"], "Stand saved.");
-  });
+      },
+      clear: [],
+      msg: "Satisfaction saved."
+    };
+  }
 
-  bindClick("btn-submit-axis", function () {
-    var left = val("axis-left-pole").trim();
-    var right = val("axis-right-pole").trim();
-    submitPayload({
-      answers: {
-        axis: {
-          leftPole: left,
-          rightPole: right,
-          scale: left && right ? left + " to " + right : (left || right),
-          selfX: axisSelfX,
-          place: "Position " + axisSelfX + "/100",
-          rivals: rivals,
-          ifWin: val("axis-if-win")
+  function advanceFromStep(stepId) {
+    var spec = stepSpec(stepId);
+    submitPayload(spec.payload, spec.clear, spec.msg, true)
+      .then(function () {
+        if (!cfg.live || !cfg.token) return;
+        return apiPost("advance", {});
+      })
+      .then(function (res) {
+        if (res && res.step) {
+          setStatus("Moved to " + res.step + ".");
         }
-      }
-    }, ["axis-left-pole", "axis-right-pole", "axis-if-win", "axis-selfX", "axis-rivals"], "Axis saved.");
-  });
+      })
+      .catch(function (e) {
+        setStatus(String(e && e.message ? e.message : e));
+      });
+  }
 
-  bindClick("btn-submit-off", function () {
-    submitPayload({
-      answers: {
-        off_axis: {
-          axisLabel: val("off-axis-label"),
-          territory: val("off-territory"),
-          selfX: offSelfX,
-          selfY: offSelfY
-        }
-      }
-    }, ["off-axis-label", "off-territory", "off-coords"], "Off-axis leap saved.");
-  });
-
-  bindClick("btn-submit-statement", function () {
-    submitPayload({ statement: val("statement") }, ["statement"], "Statement saved.");
-  });
-
-  bindClick("btn-submit-truthmode", function () {
-    submitPayload({
-      truthmode: {
-        itch: val("tm-itch"),
-        sticky: val("tm-sticky"),
-        jackBlack: val("tm-jack"),
-        cuts: cuts
-      }
-    }, ["tm-itch", "tm-sticky", "tm-jack", "tm-cuts"], "Truthmode fields saved.");
-  });
-
-  bindClick("btn-submit-satisfaction", function () {
-    submitPayload({
-      satisfaction: {
-        stand: !!(el("sat-stand") && el("sat-stand").checked),
-        axis: !!(el("sat-axis") && el("sat-axis").checked),
-        off_axis: !!(el("sat-off") && el("sat-off").checked),
-        onlyness: !!(el("sat-only") && el("sat-only").checked),
-        statement: !!(el("sat-stmt") && el("sat-stmt").checked)
-      }
-    }, [], "Satisfaction saved. Ask your coach to generate the pitch.");
+  [
+    ["btn-submit-paradox", "btn-next-paradox", "paradox"],
+    ["btn-submit-arena", "btn-next-arena", "arena"],
+    ["btn-submit-stand", "btn-next-stand", "stand"],
+    ["btn-submit-axis", "btn-next-axis", "axis"],
+    ["btn-submit-off", "btn-next-off-axis", "off_axis"],
+    ["btn-submit-statement", "btn-next-onlyness", "onlyness"],
+    ["btn-submit-truthmode", "btn-next-truthmode", "truthmode"],
+    ["btn-submit-satisfaction", "btn-next-pitch", "pitch"]
+  ].forEach(function (row) {
+    bindClick(row[0], function () {
+      var spec = stepSpec(row[2]);
+      submitPayload(spec.payload, spec.clear, spec.msg);
+    });
+    bindClick(row[1], function () {
+      advanceFromStep(row[2]);
+    });
   });
 
   bindClick("btn-send-human-msg", function () {

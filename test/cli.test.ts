@@ -325,4 +325,74 @@ describe("onlyness-axi AXI contract and Option B workflow", () => {
 
     expect(cli(["end", id], cwd).status).toBe(0);
   });
+
+  it("supports start --no-server --no-open in standalone mode without server.json", () => {
+    const cwd = makeTempCwd();
+    const res = cli(["start", "--entry", "blank", "--no-server", "--no-open"], cwd);
+    expect(res.status).toBe(0);
+    const id = res.stdout.match(/^session:\s*(\S+)/m)![1]!;
+    expect(res.stdout).toContain("mode: standalone");
+    expect(existsSync(join(cwd, ".onlyness", id, "server.json"))).toBe(false);
+    expect(cli(["end", id], cwd).status).toBe(0);
+  });
+
+  it("starts live loopback HTTP server on start --no-open, serves & advances over HTTP, and stops on end", async () => {
+    const cwd = makeTempCwd();
+    const res = cli(["start", "--entry", "blank", "--no-open"], cwd);
+    expect(res.status).toBe(0);
+    const id = res.stdout.match(/^session:\s*(\S+)/m)![1]!;
+    expect(res.stdout).toContain("mode: live-http");
+
+    const urlMatch = res.stdout.match(/^url:\s*(\S+)/m);
+    expect(urlMatch).toBeTruthy();
+    const url = urlMatch![1]!;
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/s\/[a-f0-9]+\/$/);
+
+    const serverJsonPath = join(cwd, ".onlyness", id, "server.json");
+    expect(existsSync(serverJsonPath)).toBe(true);
+    const serverMeta = JSON.parse(readFileSync(serverJsonPath, "utf8")) as {
+      pid: number;
+      port: number;
+      token: string;
+    };
+
+    const page = await fetch(url);
+    expect(page.status).toBe(200);
+    const html = await page.text();
+    expect(html).toContain('"live":true');
+    expect(html).toContain("btn-next-paradox");
+
+    const origin = `http://127.0.0.1:${serverMeta.port}`;
+    const sub = await fetch(`${origin}/api/${serverMeta.token}/submit`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin },
+      body: JSON.stringify({ paradoxAck: true }),
+    });
+    expect(sub.status).toBe(200);
+
+    const adv = await fetch(`${origin}/api/${serverMeta.token}/advance`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin },
+      body: "{}",
+    });
+    expect(adv.status).toBe(200);
+    const advBody = (await adv.json()) as { step: string };
+    expect(advBody.step).toBe("arena");
+
+    expect(cli(["end", id], cwd).status).toBe(0);
+    expect(existsSync(serverJsonPath)).toBe(false);
+
+    // Wait briefly for SIGTERM exit and verify server process is gone
+    let alive = true;
+    for (let i = 0; i < 20; i++) {
+      try {
+        process.kill(serverMeta.pid, 0);
+        await new Promise((r) => setTimeout(r, 50));
+      } catch {
+        alive = false;
+        break;
+      }
+    }
+    expect(alive).toBe(false);
+  });
 });

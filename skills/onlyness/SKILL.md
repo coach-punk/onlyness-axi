@@ -14,8 +14,8 @@ Positioning, USP stuckness, Pepsi Paradox teaching, feature-creep prune, or draf
 ## How to run (stateless AXI loop)
 
 - Invoke with `npx -y onlyness-axi` (no global install, no blocking poll loops).
-- **Interaction loop**: `start` (generates standalone `workshop.html` with interactive spatial canvas + British narrator) → gather **mutual context** and `prefill` arena → inspect via `status <id>` or relay chat answers via `submit <id> --json '…'` → coach via `coach <id> --text "…"` → `advance <id>` when gate ready (or `revise <id> <step>` to step back).
-- Optional live browser sync: run `view <id>` when the human wants real-time SSE updates without refreshing `workshop.html`.
+- **Interaction loop**: `start` (creates session, serves interactive spatial canvas + British narrator over local loopback HTTP SSE `http://127.0.0.1:<port>/s/<token>/` for full macOS Secure Context support, or standalone `workshop.html` with `--no-server`) → gather **mutual context** and `prefill` arena → inspect via `status <id>` or relay chat answers via `submit <id> --json '…'` → coach via `coach <id> --text "…"` → `advance <id>` when gate ready (or `revise <id> <step>` to step back); `end <id>` stops the server.
+- If the background server idles out or only `workshop.html` was opened, run `view <id> --bg` (or `view <id>`) to serve over HTTP.
 - Fetch guidance on demand: `playbook <playbook-id>` (`paradox`, `arena`, `stand`, `axis`, `off-axis`, `onlyness`, `truthmode`, `pitch`, `prune`, `coach`). Do not paste stale playbooks into this skill.
 
 ## Coach budget (per step)
@@ -45,7 +45,7 @@ After truthmode (with Pass 2 `set-swap` recorded), land on `pitch` step. When th
 
 ```
 commands[18]{command,summary}:
-  npx -y onlyness-axi start,Create session + standalone workshop.html
+  npx -y onlyness-axi start,Create session + serve local HTTP workshop
   npx -y onlyness-axi status <id>,"Inspect step, gate, coach job, and answers"
   npx -y onlyness-axi prefill <id>,"Prefill arena, contextSources, and specimen"
   npx -y onlyness-axi submit <id>,Apply human submission or chat answer JSON
@@ -57,9 +57,9 @@ commands[18]{command,summary}:
   npx -y onlyness-axi pitch <id>,Generate reverse-walk pitch.html deliverable
   npx -y onlyness-axi chill <id>,Pause workshop (after coach offers break)
   npx -y onlyness-axi resume <id>,Unpause after chill
-  npx -y onlyness-axi view <id>,Open optional live SSE browser sync server
+  npx -y onlyness-axi view <id>,Open or ensure live SSE HTTP workshop server
   npx -y onlyness-axi result <id>,Worksheet + statement + truthmode + pitchFile
-  npx -y onlyness-axi end <id>,End session
+  npx -y onlyness-axi end <id>,Stop HTTP server and end session
   npx -y onlyness-axi playbook <playbook-id>,Fetch step / coach / prune / pitch guidance
   npx -y onlyness-axi list,List active and paused sessions
   npx -y onlyness-axi init,Write onlyness-axi discovery block to AGENTS.md

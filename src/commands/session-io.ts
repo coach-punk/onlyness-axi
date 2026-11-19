@@ -2,6 +2,11 @@ import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AxiError } from "../output/errors.js";
+import {
+  isPidAlive,
+  readServerInfo,
+  type ServerInfo,
+} from "../server/runtime.js";
 import type { Session, TruthmodeState } from "../session/types.js";
 import { loadSession, onlynessRoot, sessionDir } from "../session/store.js";
 import { renderWorkshop } from "../surface/workshop.js";
@@ -37,6 +42,15 @@ export function pitchFilePath(sessionId: string): string {
 
 export function chillFilePath(sessionId: string): string {
   return join(sessionDir(root(), sessionId), "chill.html");
+}
+
+export function liveServerInfo(
+  sessionId: string,
+  rootDir = root(),
+): ServerInfo | null {
+  const info = readServerInfo(rootDir, sessionId);
+  if (!info) return null;
+  return isPidAlive(info.pid) ? info : null;
 }
 
 export function writeWorkshopFile(

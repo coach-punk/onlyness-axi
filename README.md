@@ -1,27 +1,30 @@
 # onlyness-axi
 
-Local-first narrated spatial AXI workshop: Pepsi Paradox → arena → 1D/2D off-axis positioning map → onlyness statement → truthmode → **pitch** (philosophy deliverable). Works across every AI agent harness with zero detached daemons, an interactive Kiln-themed visual canvas, and a browser-native deep-voiced British narrator.
+Local-first narrated spatial AXI workshop: Pepsi Paradox → arena → 1D/2D off-axis positioning map → onlyness statement → truthmode → **pitch** (philosophy deliverable). Serves over a local loopback HTTP SSE server by default (`http://127.0.0.1:<port>/s/<token>/`) so macOS / Safari / Chrome run in a real Secure Context with full Web Speech British narration and live sync (no `file://` restrictions, no blocking `poll` loops).
 
 Design spec: [docs/superpowers/specs/2026-10-19-onlyness-axi-design.md](docs/superpowers/specs/2026-10-19-onlyness-axi-design.md)
 
 ## Quick start
 
 ```bash
-# no install required
+# no install required (launches local HTTP workshop server automatically)
 npx -y onlyness-axi start --entry blank
 
 # or from a clone
 npm install && npm run build
 ONLYNESS_NO_BROWSER=1 node bin/onlyness-axi.js start --entry blank
 
+# headless / sandboxed run without launching a background server
+node bin/onlyness-axi.js start --entry blank --no-server --no-open
+
 # prefill arena from conversation / context
 node bin/onlyness-axi.js prefill <session-id> --industry "used cars" --offering "car vending" --audience "buyers"
 
-# inspect current state, gate, and coach job guidance
+# inspect current state, live URL, gate, and coach job guidance
 node bin/onlyness-axi.js status <session-id>
 
-# optional: open live SSE sync in browser (updates live without page reloads)
-node bin/onlyness-axi.js view <session-id>
+# re-open or ensure live SSE HTTP server anytime
+node bin/onlyness-axi.js view <session-id> --bg
 
 # relay answers in chat or headless mode
 node bin/onlyness-axi.js submit <session-id> --json '{"paradoxAck":true}'
@@ -35,7 +38,7 @@ node bin/onlyness-axi.js revise <session-id> off_axis
 # after satisfaction on the pitch step:
 node bin/onlyness-axi.js pitch <session-id> --open
 node bin/onlyness-axi.js result <session-id>
-node bin/onlyness-axi.js end <session-id>
+node bin/onlyness-axi.js end <session-id>   # stops HTTP server + marks ended
 ```
 
 Skill for agents: `skills/onlyness/SKILL.md` (name: `onlyness`). Regenerate with `npm run skill:gen`; drift fails `npm run skill:check`.
@@ -55,7 +58,7 @@ Every workshop mutation regenerates a self-contained `.onlyness/<slug>/workshop.
 | Command | Role |
 | --- | --- |
 | `(none)` / `list` | Active and paused sessions (`--all` includes ended) |
-| `start` | Create session + standalone `workshop.html` (`--seed`, `--entry`, `--no-open`) |
+| `start` | Create session + launch local HTTP SSE server (`--no-server`, `--port`, `--no-open`, `--seed`, `--entry`) |
 | `status <session>` | Inspect current step, gate, `coachJob`, fenced answers (`--full`) |
 | `prefill <session>` | Prefill arena, `contextSources`, or custom `--example-json` |
 | `submit <session>` | Apply human submission JSON from chat or clipboard (`--json`, `--file`) |
@@ -65,9 +68,9 @@ Every workshop mutation regenerates a self-contained `.onlyness/<slug>/workshop.
 | `truthmode check\|set-swap` | Pass 1 deterministic rubric + Pass 2 adversarial rival swap |
 | `pitch <session>` | Generate standalone reverse-walk `pitch.html` (`--open`) |
 | `chill <session>` / `resume` | Pause workshop on coach break offer / resume later |
-| `view <session>` | Optional loopback SSE server (`--port`, `--no-open`) for live browser sync |
+| `view <session>` | Open or ensure loopback SSE HTTP server (`--bg`, `--port`, `--no-open`) |
 | `result <session>` | Full worksheet + spatial coords + truthmode + `pitchFile` (`--full`) |
-| `end <session>` | Mark session ended |
+| `end <session>` | Stop local HTTP server and mark session ended |
 | `playbook <id>` | On-demand step / coach / pitch / prune guidance |
 | `init` | Idempotently write `onlyness-axi` discovery instructions into `AGENTS.md` |
 | `--help` | Concise per-subcommand reference |
@@ -79,7 +82,8 @@ Playbook ids: `paradox`, `arena`, `stand`, `axis`, `off-axis`, `onlyness`, `trut
 ```text
 .onlyness/<slug>/
   session.json      # atomic versioned state, arena, 1D/2D coords, answers, truthmode, satisfaction
-  workshop.html     # self-contained interactive visual stage + British narrator
+  server.json       # live HTTP server pid, port, and token while running
+  workshop.html     # standalone fallback canvas + British narrator
   chill.html        # calm pause room when status is paused
   pitch.html        # reverse-walk 2D map + elevator pitch deliverable
   seed.md           # optional, when started with seed material

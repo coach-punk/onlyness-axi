@@ -2,13 +2,16 @@ import { existsSync, writeFileSync } from "node:fs";
 import type { CommandModule } from "../cli/router.js";
 import { AxiError } from "../output/errors.js";
 import { emitBlock, emitKV, print } from "../output/toon.js";
+import { ensureViewServer, serverPitchUrl } from "../server/runtime.js";
 import { canAdvance, satisfactionComplete } from "../session/steps.js";
 import type { Session } from "../session/types.js";
 import { renderPitch } from "../surface/pitch.js";
 import {
+  liveServerInfo,
   openInBrowser,
   pitchFilePath,
   requireSession,
+  root,
 } from "./session-io.js";
 
 export function writePitchFile(sessionId: string, html: string): string {
@@ -68,7 +71,7 @@ export const pitchCommand: CommandModule = {
         name: "open",
         type: "boolean",
         default: false,
-        description: "open generated pitch.html in default browser",
+        description: "open generated pitch in default browser via HTTP when available",
       },
     ],
     examples: [
@@ -76,23 +79,40 @@ export const pitchCommand: CommandModule = {
       "onlyness-axi pitch s-… --open",
     ],
   },
-  run(parsed) {
+  async run(parsed) {
     const id = parsed.positionals[0]!;
     const { session, path } = generatePitch(id);
+    const rootDir = root();
+    let info = liveServerInfo(session.id, rootDir);
+
+    if (
+      parsed.flags["open"] &&
+      !info &&
+      process.env["ONLYNESS_NO_SERVER"] !== "1"
+    ) {
+      try {
+        info = await ensureViewServer(rootDir, session.id);
+      } catch {
+        info = null;
+      }
+    }
+
+    const pitchUrl = info ? serverPitchUrl(info) : "";
     if (parsed.flags["open"]) {
-      openInBrowser(path);
+      openInBrowser(pitchUrl || path);
     }
 
     print(
       emitKV([
         ["session", session.id],
         ["pitchFile", path],
+        ...(pitchUrl ? ([["pitchUrl", pitchUrl]] as Array<[string, string]>) : []),
         ["gate", canAdvance({ ...session, step: "pitch" }).ok ? "ready" : "blocked"],
       ]),
     );
     print(
       emitBlock("next", [
-        `1. Open ${path}`,
+        `1. Open ${pitchUrl || path}`,
         `2. onlyness-axi advance ${session.id} when satisfied (to done)`,
         `3. onlyness-axi result ${session.id}`,
       ]),

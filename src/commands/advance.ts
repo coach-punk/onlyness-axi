@@ -1,14 +1,15 @@
 import type { CommandModule } from "../cli/router.js";
 import { AxiError } from "../output/errors.js";
 import { emitBlock, emitKV, print } from "../output/toon.js";
+import { serverPitchUrl, serverUrl } from "../server/runtime.js";
 import { advanceSession } from "../session/steps.js";
 import { saveSession } from "../session/store.js";
 import { generatePitch, pitchFileExists } from "./pitch.js";
 import {
+  liveServerInfo,
   pitchFilePath,
   requireSession,
   root,
-  workshopFilePath,
   writeWorkshopFile,
 } from "./session-io.js";
 
@@ -72,11 +73,17 @@ export const advanceCommand: CommandModule = {
           ? "pitch"
           : session.step;
 
+    const info = liveServerInfo(session.id, rootDir);
+    const url = info ? serverUrl(info) : "";
+    const pitchUrl = info && pitchFile ? serverPitchUrl(info) : "";
+
     print(
       emitKV([
         ["session", session.id],
         ["step", session.step],
         ["coachBudgetUsed", `${session.coachBudget.used}/${session.coachBudget.max}`],
+        ...(url ? ([["url", url]] as Array<[string, string]>) : []),
+        ...(pitchUrl ? ([["pitchUrl", pitchUrl]] as Array<[string, string]>) : []),
         ["workshopFile", workshopFile],
         ["pitchFile", pitchFile],
       ]),
@@ -86,8 +93,8 @@ export const advanceCommand: CommandModule = {
         session.step === "pitch"
           ? `1. Confirm satisfaction, then run: onlyness-axi pitch ${id}`
           : `1. onlyness-axi playbook ${playbookId}`,
-        pitchFile
-          ? `2. Open ${pitchFile}`
+        pitchUrl || pitchFile
+          ? `2. Open ${pitchUrl || pitchFile}`
           : `2. onlyness-axi status ${session.id}`,
       ]),
     );

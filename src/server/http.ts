@@ -5,6 +5,7 @@ import { pauseSession } from "../commands/chill.js";
 import { resumeSession } from "../commands/resume.js";
 import { writeWorkshopFile } from "../commands/session-io.js";
 import {
+  advanceSession,
   applyHumanSubmit,
   canAdvance,
   REVISABLE_STEPS,
@@ -22,6 +23,8 @@ export type StartServerOpts = {
   sessionId: string;
   port?: number;
   token?: string;
+  idleTimeoutMs?: number;
+  onIdleClose?: () => void;
 };
 
 export type StartedServer = {
@@ -78,8 +81,11 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
   const token = opts.token ?? initialSession.authToken;
 
   const activeStreams = new Set<() => void>();
+  let lastActivityAt = Date.now();
+  let closed = false;
 
   const server = createServer(async (req, res) => {
+    lastActivityAt = Date.now();
     try {
       const url = new URL(req.url ?? "/", "http://127.0.0.1");
       const method = req.method ?? "GET";
@@ -216,10 +222,10 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
         });
 
         let lastKey = "";
-        let closed = false;
+        let streamClosed = false;
 
         const pushIfChanged = () => {
-          if (closed) return;
+          if (streamClosed) return;
           try {
             const latest = loadSession(rootDir, sessionId);
             const key = `${latest.version}:${latest.updatedAt}`;
@@ -243,8 +249,9 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
         const pollTimer = setInterval(pushIfChanged, 400);
 
         const cleanup = () => {
-          if (closed) return;
-          closed = true;
+          if (streamClosed) return;
+          streamClosed = true;
+          lastActivityAt = Date.now();
           clearInterval(pollTimer);
           if (watcher) {
             try {
@@ -279,6 +286,40 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
         session = applyHumanSubmit(session, body as HumanSubmitPayload);
         saveSession(rootDir, session);
         writeWorkshopFile(session, rootDir);
+        sendJson(res, 200, {
+          ok: true,
+          version: session.version,
+          step: session.step,
+          status: session.status,
+        });
+        return;
+      }
+
+      // POST /api/:token/advance
+      if (method === "POST" && effectivePath === "/api/advance") {
+        let session = loadSession(rootDir, sessionId);
+        if (session.status !== "active") {
+          sendJson(res, 409, {
+            error: `session ${session.status} — resume or start a new session`,
+          });
+          return;
+        }
+        const gate = canAdvance(session);
+        if (!gate.ok) {
+          sendJson(res, 409, { error: gate.reason ?? "cannot advance" });
+          return;
+        }
+        const fromStep = session.step;
+        session = advanceSession(session);
+        saveSession(rootDir, session);
+        writeWorkshopFile(session, rootDir);
+        if (fromStep === "pitch" && session.step === "done") {
+          try {
+            writeFileSync(join(dir, "pitch.html"), renderPitch(session), "utf8");
+          } catch {
+            // Best-effort pitch file refresh.
+          }
+        }
         sendJson(res, 200, {
           ok: true,
           version: session.version,
@@ -414,16 +455,43 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
     throw new Error("failed to bind server");
   }
 
+  let idleTimer: ReturnType<typeof setInterval> | null = null;
+
+  const close = async () => {
+    if (closed) return;
+    closed = true;
+    if (idleTimer) {
+      clearInterval(idleTimer);
+      idleTimer = null;
+    }
+    for (const cleanup of [...activeStreams]) {
+      cleanup();
+    }
+    await new Promise<void>((resolve, reject) => {
+      server.close((err) => (err ? reject(err) : resolve()));
+    });
+  };
+
+  if (opts.idleTimeoutMs && opts.idleTimeoutMs > 0) {
+    const checkEvery = Math.max(50, Math.min(opts.idleTimeoutMs, 60_000));
+    idleTimer = setInterval(() => {
+      if (
+        !closed &&
+        activeStreams.size === 0 &&
+        Date.now() - lastActivityAt >= opts.idleTimeoutMs!
+      ) {
+        close().then(
+          () => opts.onIdleClose?.(),
+          () => opts.onIdleClose?.(),
+        );
+      }
+    }, checkEvery);
+    idleTimer.unref();
+  }
+
   return {
     port: addr.port,
     token,
-    close: async () => {
-      for (const cleanup of [...activeStreams]) {
-        cleanup();
-      }
-      await new Promise<void>((resolve, reject) => {
-        server.close((err) => (err ? reject(err) : resolve()));
-      });
-    },
+    close,
   };
 }

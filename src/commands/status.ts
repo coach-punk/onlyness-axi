@@ -1,9 +1,10 @@
 import type { CommandModule } from "../cli/router.js";
 import { emitBlock, emitKV, print } from "../output/toon.js";
 import { truncate, truncationNote } from "../output/truncate.js";
+import { serverUrl } from "../server/runtime.js";
 import { coachJobGuidance, nextCoachJob } from "../session/coach.js";
 import { canAdvance } from "../session/steps.js";
-import { requireSession, workshopFilePath } from "./session-io.js";
+import { liveServerInfo, requireSession, workshopFilePath } from "./session-io.js";
 
 export const statusCommand: CommandModule = {
   spec: {
@@ -38,6 +39,8 @@ export const statusCommand: CommandModule = {
           ? "pitch"
           : session.step;
 
+    const info = liveServerInfo(session.id);
+
     print(
       emitKV([
         ["session", session.id],
@@ -51,6 +54,7 @@ export const statusCommand: CommandModule = {
         ["coachJobGuidance", guidance],
         ["statement", session.statement],
         ["verdict", session.truthmode?.verdict ?? ""],
+        ...(info ? ([["url", serverUrl(info)]] as Array<[string, string]>) : []),
         ["workshopFile", workshopFilePath(session.id)],
       ]),
     );

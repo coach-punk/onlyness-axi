@@ -118,4 +118,61 @@ describe("optional live SSE server with token auth", () => {
     expect(decoder.decode(secondChunk.value)).toContain("Updated via disk save");
     ac.abort();
   });
+
+  it("handles POST /api/:token/advance gating (409 when blocked, 200 when satisfied)", async () => {
+    root = mkdtempSync(join(tmpdir(), "onlyness-adv-"));
+    const session = createSession({});
+    saveSession(root, session);
+
+    const srv = await startServer({
+      rootDir: root,
+      sessionId: session.id,
+      port: 0,
+    });
+    close = srv.close;
+
+    const blocked = await fetch(
+      `http://127.0.0.1:${srv.port}/api/${srv.token}/advance`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: `http://127.0.0.1:${srv.port}`,
+        },
+        body: "{}",
+      },
+    );
+    expect(blocked.status).toBe(409);
+    const blockedBody = (await blocked.json()) as { error: string };
+    expect(blockedBody.error).toContain("Pepsi Paradox");
+
+    const submitAck = await fetch(
+      `http://127.0.0.1:${srv.port}/api/${srv.token}/submit`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: `http://127.0.0.1:${srv.port}`,
+        },
+        body: JSON.stringify({ paradoxAck: true }),
+      },
+    );
+    expect(submitAck.status).toBe(200);
+
+    const ok = await fetch(
+      `http://127.0.0.1:${srv.port}/api/${srv.token}/advance`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: `http://127.0.0.1:${srv.port}`,
+        },
+        body: "{}",
+      },
+    );
+    expect(ok.status).toBe(200);
+    const okBody = (await ok.json()) as { step: string };
+    expect(okBody.step).toBe("arena");
+    expect(loadSession(root, session.id).step).toBe("arena");
+  });
 });

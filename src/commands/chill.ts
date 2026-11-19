@@ -3,10 +3,11 @@ import { join } from "node:path";
 import type { CommandModule } from "../cli/router.js";
 import { AxiError } from "../output/errors.js";
 import { emitBlock, emitKV, print } from "../output/toon.js";
+import { serverUrl } from "../server/runtime.js";
 import { loadSession, saveSession, sessionDir } from "../session/store.js";
 import type { Session } from "../session/types.js";
 import { renderChill } from "../surface/chill.js";
-import { chillFilePath, requireSession, root } from "./session-io.js";
+import { chillFilePath, liveServerInfo, requireSession, root } from "./session-io.js";
 
 export function writeChillFile(
   rootDir: string,
@@ -91,18 +92,21 @@ export const chillCommand: CommandModule = {
         : undefined;
     const session = pauseSession(root(), id, reason);
     const chillFile = chillFilePath(session.id);
+    const info = liveServerInfo(session.id);
+    const url = info ? serverUrl(info) : "";
 
     print(
       emitKV([
         ["session", session.id],
         ["status", session.status],
         ["step", session.step],
+        ...(url ? ([["url", url]] as Array<[string, string]>) : []),
         ["chillFile", chillFile],
       ]),
     );
     print(
       emitBlock("next", [
-        `1. Open ${chillFile} (or run onlyness-axi view ${session.id})`,
+        `1. Open ${url || chillFile} (or run onlyness-axi view ${session.id})`,
         `2. onlyness-axi resume ${session.id} when they are ready`,
       ]),
     );

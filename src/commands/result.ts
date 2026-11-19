@@ -1,9 +1,11 @@
 import type { CommandModule } from "../cli/router.js";
 import { emitBlock, emitKV, emitList, print } from "../output/toon.js";
 import { truncate, truncationNote } from "../output/truncate.js";
+import { serverPitchUrl, serverUrl } from "../server/runtime.js";
 import type { AxisAnswer, OffAxisAnswer } from "../session/types.js";
 import { pitchFileExists } from "./pitch.js";
 import {
+  liveServerInfo,
   pitchFilePath,
   requireSession,
   workshopFilePath,
@@ -53,6 +55,9 @@ export const resultCommand: CommandModule = {
     const answersOut = full
       ? { text: answersJson, truncated: false, totalChars: answersJson.length }
       : truncate(answersJson, 800);
+    const info = liveServerInfo(session.id);
+    const liveUrl = info ? serverUrl(info) : "";
+    const pitchUrl = info && hasPitch ? serverPitchUrl(info) : "";
 
     print(
       emitKV([
@@ -72,6 +77,8 @@ export const resultCommand: CommandModule = {
         ["itch", maybeTrunc(t?.itch ?? "")],
         ["sticky", maybeTrunc(t?.sticky ?? "")],
         ["jackBlack", maybeTrunc(t?.jackBlack ?? "")],
+        ...(liveUrl ? ([["url", liveUrl]] as Array<[string, string]>) : []),
+        ...(pitchUrl ? ([["pitchUrl", pitchUrl]] as Array<[string, string]>) : []),
         ["workshopFile", workshopFilePath(session.id)],
         ["pitchFile", hasPitch ? pitchFilePath(session.id) : ""],
       ]),

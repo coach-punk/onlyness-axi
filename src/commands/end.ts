@@ -1,12 +1,13 @@
 import type { CommandModule } from "../cli/router.js";
 import { emitBlock, emitKV, print } from "../output/toon.js";
+import { stopViewServer } from "../server/runtime.js";
 import { saveSession } from "../session/store.js";
 import { requireSession, root, writeWorkshopFile } from "./session-io.js";
 
 export const endCommand: CommandModule = {
   spec: {
     name: "end",
-    summary: "Mark session ended cleanly",
+    summary: "Stop local HTTP server and mark session ended cleanly",
     args: [
       { name: "session", required: true, description: "session id" },
     ],
@@ -17,6 +18,8 @@ export const endCommand: CommandModule = {
     const id = parsed.positionals[0]!;
     let session = requireSession(id);
     const rootDir = root();
+
+    stopViewServer(rootDir, session.id);
 
     session = { ...session, status: "ended" };
     saveSession(rootDir, session);
