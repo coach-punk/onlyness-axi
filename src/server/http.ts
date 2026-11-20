@@ -8,15 +8,17 @@ import {
   advanceSession,
   applyHumanSubmit,
   canAdvance,
+  emptyTruthmode,
   REVISABLE_STEPS,
   reviseStep,
   type HumanSubmitPayload,
 } from "../session/steps.js";
 import { loadSession, saveSession, sessionDir } from "../session/store.js";
-import type { StepId } from "../session/types.js";
+import type { Session, StepId } from "../session/types.js";
 import { renderChill } from "../surface/chill.js";
 import { renderPitch } from "../surface/pitch.js";
 import { renderWorkshop } from "../surface/workshop.js";
+import { runRubric } from "../truthmode/rubric.js";
 
 export type StartServerOpts = {
   rootDir: string;
@@ -73,6 +75,31 @@ function parseJsonBody(raw: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
+function ensureTruthmodeRubric(session: Session): {
+  session: Session;
+  updated: boolean;
+} {
+  if (
+    session.step === "truthmode" &&
+    session.statement.trim().length > 0 &&
+    (!session.truthmode || session.truthmode.verdict === null)
+  ) {
+    const { verdict, checks } = runRubric(session.statement, session.arena);
+    return {
+      session: {
+        ...session,
+        truthmode: {
+          ...(session.truthmode ?? emptyTruthmode()),
+          verdict,
+          checks,
+        },
+      },
+      updated: true,
+    };
+  }
+  return { session, updated: false };
+}
+
 export async function startServer(opts: StartServerOpts): Promise<StartedServer> {
   const { rootDir, sessionId } = opts;
   const listenPort = opts.port ?? 0;
@@ -90,6 +117,12 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
       const url = new URL(req.url ?? "/", "http://127.0.0.1");
       const method = req.method ?? "GET";
       const pathname = url.pathname;
+
+      if (method === "GET" && pathname === "/favicon.ico") {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
 
       let reqToken: string | null = null;
       let effectivePath = pathname;
@@ -284,6 +317,7 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
         }
         const body = parseJsonBody(await readBody(req));
         session = applyHumanSubmit(session, body as HumanSubmitPayload);
+        session = ensureTruthmodeRubric(session).session;
         saveSession(rootDir, session);
         writeWorkshopFile(session, rootDir);
         sendJson(res, 200, {
@@ -291,6 +325,39 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
           version: session.version,
           step: session.step,
           status: session.status,
+        });
+        return;
+      }
+
+      // POST /api/:token/truthmode-check
+      if (method === "POST" && effectivePath === "/api/truthmode-check") {
+        let session = loadSession(rootDir, sessionId);
+        if (session.status !== "active") {
+          sendJson(res, 409, { error: `session ${session.status}` });
+          return;
+        }
+        if (!session.statement.trim()) {
+          sendJson(res, 409, { error: "draft an onlyness statement first" });
+          return;
+        }
+        const { verdict, checks } = runRubric(session.statement, session.arena);
+        session = {
+          ...session,
+          truthmode: {
+            ...(session.truthmode ?? emptyTruthmode()),
+            verdict,
+            checks,
+          },
+        };
+        saveSession(rootDir, session);
+        writeWorkshopFile(session, rootDir);
+        sendJson(res, 200, {
+          ok: true,
+          version: session.version,
+          step: session.step,
+          status: session.status,
+          verdict,
+          checks,
         });
         return;
       }
@@ -303,6 +370,12 @@ export async function startServer(opts: StartServerOpts): Promise<StartedServer>
             error: `session ${session.status} — resume or start a new session`,
           });
           return;
+        }
+        const checked = ensureTruthmodeRubric(session);
+        if (checked.updated) {
+          session = checked.session;
+          saveSession(rootDir, session);
+          writeWorkshopFile(session, rootDir);
         }
         const gate = canAdvance(session);
         if (!gate.ok) {

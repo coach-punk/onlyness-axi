@@ -175,4 +175,118 @@ describe("optional live SSE server with token auth", () => {
     expect(okBody.step).toBe("arena");
     expect(loadSession(root, session.id).step).toBe("arena");
   });
+
+  it("serves 204 for /favicon.ico, checks rubric via truthmode-check, and completes Truthmode -> Pitch -> Done over HTTP", async () => {
+    root = mkdtempSync(join(tmpdir(), "onlyness-tm-flow-"));
+    const session = createSession({});
+    session.step = "truthmode";
+    session.paradoxAck = true;
+    session.arena = {
+      industry: "Used car retail",
+      offering: "Online used-car sales",
+      audience: "Buyers avoiding dealerships",
+    };
+    session.statement = "I am the only car retailer that is faster and cheaper";
+    session.truthmode = {
+      verdict: null,
+      checks: [],
+      swap: "Metro Auto is the only car retailer that is faster and cheaper",
+      itch: "Dealership dread",
+      sticky: "Fast cheaper car deals",
+      jackBlack: "Every lot says this",
+      cuts: [],
+    };
+    saveSession(root, session);
+
+    const srv = await startServer({
+      rootDir: root,
+      sessionId: session.id,
+      port: 0,
+    });
+    close = srv.close;
+
+    const base = `http://127.0.0.1:${srv.port}`;
+    const headers = {
+      "content-type": "application/json",
+      origin: base,
+    };
+
+    const fav = await fetch(`${base}/favicon.ico`);
+    expect(fav.status).toBe(204);
+
+    // Pre-existing verdict:null session with failing statement self-heals Pass 1 and still blocks advance
+    const blockedFail = await fetch(`${base}/api/${srv.token}/advance`, {
+      method: "POST",
+      headers,
+      body: "{}",
+    });
+    expect(blockedFail.status).toBe(409);
+    const blockedJson = (await blockedFail.json()) as { error: string };
+    expect(blockedJson.error).toContain("truthmode failed");
+    expect(loadSession(root, session.id).truthmode?.verdict).toBe("fail");
+
+    // Rewrite strong statement -> truthmode-check returns pass
+    const reviseRes = await fetch(`${base}/api/${srv.token}/submit`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        statement:
+          "I am the only car retailer that sells cars from a vending machine",
+      }),
+    });
+    expect(reviseRes.status).toBe(200);
+
+    const checkRes = await fetch(`${base}/api/${srv.token}/truthmode-check`, {
+      method: "POST",
+      headers,
+      body: "{}",
+    });
+    expect(checkRes.status).toBe(200);
+    const checkBody = (await checkRes.json()) as {
+      ok: boolean;
+      verdict: string;
+      checks: unknown[];
+    };
+    expect(checkBody.ok).toBe(true);
+    expect(checkBody.verdict).toBe("pass");
+    expect(loadSession(root, session.id).truthmode?.verdict).toBe("pass");
+
+    // Truthmode -> Pitch
+    const toPitch = await fetch(`${base}/api/${srv.token}/advance`, {
+      method: "POST",
+      headers,
+      body: "{}",
+    });
+    expect(toPitch.status).toBe(200);
+    expect(((await toPitch.json()) as { step: string }).step).toBe("pitch");
+
+    // Confirm satisfaction -> Done -> GET /s/:token/pitch returns 200
+    const satRes = await fetch(`${base}/api/${srv.token}/submit`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        satisfaction: {
+          stand: true,
+          axis: true,
+          off_axis: true,
+          onlyness: true,
+          statement: true,
+        },
+      }),
+    });
+    expect(satRes.status).toBe(200);
+
+    const toDone = await fetch(`${base}/api/${srv.token}/advance`, {
+      method: "POST",
+      headers,
+      body: "{}",
+    });
+    expect(toDone.status).toBe(200);
+    expect(((await toDone.json()) as { step: string }).step).toBe("done");
+
+    const pitchRes = await fetch(`${base}/s/${srv.token}/pitch`);
+    expect(pitchRes.status).toBe(200);
+    const pitchHtml = await pitchRes.text();
+    expect(pitchHtml).toContain("vending machine");
+  });
 });

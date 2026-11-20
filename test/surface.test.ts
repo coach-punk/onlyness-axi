@@ -68,6 +68,12 @@ describe("narrated spatial surface templates", () => {
     expect(html).toContain("btn-add-cut");
     expect(html).toContain("btn-revise-off-axis");
     expect(html).toContain("btn-copy-submit");
+    expect(html).toContain('id="tm-swap"');
+    expect(html).toContain('id="btn-gen-swap"');
+    expect(html).toContain('id="btn-speak-swap"');
+    expect(html).toContain('id="btn-run-truthmode-check"');
+    expect(html).toContain('id="step-feedback"');
+    expect(html).toContain('<link rel="icon"');
     expect(html).not.toMatch(/\/api\/submit/);
     expect(html).not.toMatch(/\/api\/session/);
 
@@ -95,6 +101,7 @@ describe("narrated spatial surface templates", () => {
     expect(html).toContain("Haggling desks");
     expect(html).toContain("Honest Bob claims a vending machine");
     expect(html).toContain("btn-narrate-pitch");
+    expect(html).toContain('<link rel="icon"');
     expect(html).not.toContain("Keep restating");
     expect(html).not.toContain("fizzy-water race");
   });
@@ -103,6 +110,7 @@ describe("narrated spatial surface templates", () => {
     const s = richSession();
     const standalone = renderChill(s, "Step away for tea.", { live: false, token: "" });
     expect(standalone).toContain("You are permitted to stop.");
+    expect(standalone).toContain('<link rel="icon"');
     expect(standalone).toContain("btn-copy-resume");
     expect(standalone).not.toContain('id="btn-resume-live"');
 

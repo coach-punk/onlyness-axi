@@ -145,4 +145,40 @@ describe("steps", () => {
 
     expect(() => reviseStep(s, "done")).toThrow();
   });
+
+  it("auto-computes Pass 1 rubric when advancing from onlyness to truthmode and keeps fail blocking pitch", () => {
+    const passSession = createSession({});
+    passSession.step = "onlyness";
+    passSession.arena = {
+      industry: "Used car retail",
+      offering: "Online used-car sales",
+      audience: "First-time buyers",
+    };
+    passSession.statement =
+      "I am the only car retailer that sells cars from a vending machine";
+
+    const atTruthmode = advanceSession(passSession);
+    expect(atTruthmode.step).toBe("truthmode");
+    expect(atTruthmode.truthmode?.verdict).toBe("pass");
+
+    const failSession = createSession({});
+    failSession.step = "onlyness";
+    failSession.arena = passSession.arena;
+    failSession.statement = "I am the only car retailer that is faster and cheaper";
+
+    const failedTruthmode = advanceSession(failSession);
+    expect(failedTruthmode.step).toBe("truthmode");
+    expect(failedTruthmode.truthmode?.verdict).toBe("fail");
+
+    failedTruthmode.truthmode = {
+      ...failedTruthmode.truthmode!,
+      swap: "Metro Auto says the exact same thing.",
+      itch: "Dealer haggling",
+      sticky: "Fast car deals",
+      jackBlack: "No resistance",
+    };
+    const gate = canAdvance(failedTruthmode);
+    expect(gate.ok).toBe(false);
+    expect(gate.reason).toContain("truthmode failed");
+  });
 });

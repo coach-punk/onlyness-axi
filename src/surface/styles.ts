@@ -6,6 +6,8 @@ export const KILN_FONTS_HTML = `<link rel="preconnect" href="https://api.fontsha
 <link href="https://api.fontshare.com/v2/css?f[]=boska@500&display=swap" rel="stylesheet" />
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&family=Geist+Mono:wght@400&display=swap" rel="stylesheet" />`;
 
+export const KILN_FAVICON_HTML = `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231b1512'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23d97736'/%3E%3C/svg%3E" />`;
+
 const KILN_ROOT_TOKENS = `:root {
   color-scheme: dark;
   --color-paper: oklch(13% 0.012 40);
@@ -299,6 +301,21 @@ select:focus-visible {
   border-color: var(--color-ink-2);
 }
 
+input[aria-invalid="true"],
+textarea[aria-invalid="true"],
+select[aria-invalid="true"] {
+  border-color: var(--color-error);
+}
+
+input[type="checkbox"][aria-invalid="true"] {
+  outline: 2px solid var(--color-error);
+  outline-offset: 2px;
+}
+
+.check-row:has([aria-invalid="true"]) {
+  border-color: var(--color-error);
+}
+
 textarea {
   min-height: 5.5rem;
   resize: vertical;
@@ -543,6 +560,42 @@ ${SHARED_BASE_CSS}
   align-items: center;
   gap: var(--space-sm);
   margin-top: var(--space-lg);
+}
+
+.verdict-actions,
+.swap-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+
+.step-feedback {
+  min-height: 0;
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+  border-radius: var(--radius-sm);
+}
+
+.step-feedback[data-kind="error"] {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-error-surface);
+  border: var(--rule-hair) solid var(--color-error);
+  color: var(--color-ink);
+}
+
+.step-feedback[data-kind="ok"] {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-pass-surface);
+  border: var(--rule-hair) solid var(--color-pass);
+  color: var(--color-ink);
+}
+
+.step-feedback[data-kind="info"] {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-paper-2);
+  border: var(--rule-hair) solid var(--color-rule);
+  color: var(--color-ink-2);
 }
 
 .compass-strip {

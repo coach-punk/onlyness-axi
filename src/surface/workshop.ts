@@ -12,7 +12,7 @@ import type {
 import { STEP_ORDER } from "../session/steps.js";
 import { RUBRIC_CLIENT_RULES } from "../truthmode/rubric.js";
 import { narratorClientScript, NARRATOR_SCRIPTS } from "./narrator.js";
-import { KILN_FONTS_HTML, workshopCss } from "./styles.js";
+import { KILN_FAVICON_HTML, KILN_FONTS_HTML, workshopCss } from "./styles.js";
 
 function escapeHtml(s: string): string {
   return s
@@ -76,7 +76,7 @@ function coachEntriesHtml(log: CoachEntry[]): string {
 
 function truthmodeServerVerdictHtml(t: TruthmodeState | null): string {
   if (!t || t.verdict === null) {
-    return `<div class="lint-item" data-severity="weak">${ICON_WARN}<span>Run truthmode check via your coach to score the statement against the rubric.</span></div>`;
+    return `<div class="lint-item" data-severity="weak">${ICON_WARN}<span>Click Run rubric check to score your statement against the Pass 1 rubric.</span></div>`;
   }
   const icon = t.verdict === "pass" ? ICON_CHECK : ICON_WARN;
   const sev = t.verdict === "pass" ? "pass" : t.verdict === "fail" ? "fail" : "weak";
@@ -187,6 +187,7 @@ export function renderWorkshop(
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="description" content="Interactive Onlyness spatial positioning workshop." />
 <title>Onlyness workshop | ${escapeHtml(session.id)}</title>
+${KILN_FAVICON_HTML}
 ${KILN_FONTS_HTML}
 <style>
 ${workshopCss()}
@@ -236,7 +237,7 @@ ${workshopCss()}
       <!-- ACT 0: PEPSI PARADOX -->
       <section id="sec-paradox" class="well${show(step, "paradox")}" aria-labelledby="h-paradox">
         <div class="stage-head">
-          <h2 id="h-paradox">Act 0: The Pepsi Paradox</h2>
+          <h2 id="h-paradox" tabindex="-1">Act 0: The Pepsi Paradox</h2>
           <span class="field-hint">Why winning the axis of better still loses</span>
         </div>
         <p class="stage-lead">In blind taste tests, consumers routinely prefer Pepsi. Once they can see the label, preference swings decisively to Coca-Cola. People buy a sticky identity, not a slightly sweeter formula.</p>
@@ -280,7 +281,7 @@ ${workshopCss()}
       <!-- ACT 0: ARENA + WORKED SPECIMEN -->
       <section id="sec-arena" class="well${show(step, "arena")}" aria-labelledby="h-arena">
         <div class="stage-head">
-          <h2 id="h-arena">Act 0: Set the arena</h2>
+          <h2 id="h-arena" tabindex="-1">Act 0: Set the arena</h2>
           <span class="field-hint">Ground coaching in your real market</span>
         </div>
         <div class="field-grid">
@@ -316,7 +317,7 @@ ${workshopCss()}
       <!-- STEP 1: STAND -->
       <section id="sec-stand" class="well${show(step, "stand")}" aria-labelledby="h-stand">
         <div class="stage-head">
-          <h2 id="h-stand">Step 1: Where do you stand</h2>
+          <h2 id="h-stand" tabindex="-1">Step 1: Where do you stand</h2>
           <span class="field-hint">Problem parameters before solutions</span>
         </div>
         ${session.seedPreview ? `<details style="margin-bottom: var(--space-md);"><summary>Seed material (fight with it)</summary><p class="field-hint" style="margin-top: var(--space-xs);">${escapeHtml(session.seedPreview)}</p></details>` : ""}
@@ -343,7 +344,7 @@ ${workshopCss()}
       <!-- STEP 2: AXIS OF BETTER (INTERACTIVE 1D SPECTRUM) -->
       <section id="sec-axis" class="well${show(step, "axis")}" aria-labelledby="h-axis">
         <div class="stage-head">
-          <h2 id="h-axis">Step 2: The Axis of Better</h2>
+          <h2 id="h-axis" tabindex="-1">Step 2: The Axis of Better</h2>
           <span class="field-hint">Drop your rivals on the line, then place yourself</span>
         </div>
         <div class="field-grid field-grid--two">
@@ -394,7 +395,7 @@ ${workshopCss()}
       <!-- STEP 3: OFF-AXIS (1D -> 2D SPATIAL LEAP) -->
       <section id="sec-off-axis" class="well${show(step, "off_axis")}" aria-labelledby="h-off-axis">
         <div class="stage-head">
-          <h2 id="h-off-axis">Step 3: Step off the axis</h2>
+          <h2 id="h-off-axis" tabindex="-1">Step 3: Step off the axis</h2>
           <span class="field-hint">Drag your marker vertically out of the crowded race</span>
         </div>
         <div>
@@ -437,7 +438,7 @@ ${workshopCss()}
       <!-- STEP 4: ONLYNESS + LIVE LINT + BRAD PITT SWAP -->
       <section id="sec-onlyness" class="well${show(step, "onlyness")}" aria-labelledby="h-onlyness">
         <div class="stage-head">
-          <h2 id="h-onlyness">Step 4: Draft your Onlyness</h2>
+          <h2 id="h-onlyness" tabindex="-1">Step 4: Draft your Onlyness</h2>
           <span class="field-hint">Paradigm claim with live truthmode lint</span>
         </div>
 
@@ -490,11 +491,14 @@ ${workshopCss()}
       <!-- TRUTHMODE + PRUNE KNIFE -->
       <section id="sec-truthmode" class="well${show(step, "truthmode")}" aria-labelledby="h-truthmode">
         <div class="stage-head">
-          <h2 id="h-truthmode">Truthmode stress test</h2>
+          <h2 id="h-truthmode" tabindex="-1">Truthmode stress test</h2>
           <span class="field-hint">Rubric, adversarial swap, and cuts</span>
         </div>
 
         <div id="truthmode-verdict-box">${truthmodeServerVerdictHtml(tm)}</div>
+        <div class="verdict-actions">
+          <button type="button" class="btn--secondary btn--compact" id="btn-run-truthmode-check">Run rubric check</button>
+        </div>
 
         <div class="split-compare">
           <div>
@@ -502,23 +506,31 @@ ${workshopCss()}
             <p id="tm-statement-display">${escapeHtml(session.statement || "No statement yet.")}</p>
           </div>
           <div>
-            <p class="field-label">Pass 2 adversarial swap (from coach)</p>
-            <p id="tm-swap-display">${escapeHtml(tm?.swap || "Waiting for coach to run truthmode set-swap.")}</p>
+            <label for="tm-swap">Pass 2 adversarial swap (put your claim in a rival’s mouth)</label>
+            <textarea id="tm-swap" aria-describedby="tm-swap-hint" placeholder="Rewrite your statement as if your biggest rival claimed it.">${escapeHtml(tm?.swap ?? "")}</textarea>
+            <p id="tm-swap-hint" class="field-hint">Click Generate rival swap to plug in one of your plotted competitors, then edit if needed.</p>
+            <div class="swap-actions">
+              <button type="button" class="btn--secondary btn--compact" id="btn-gen-swap">Generate rival swap</button>
+              <button type="button" class="btn--ghost btn--compact" id="btn-speak-swap">${ICON_SPEAKER}<span>Read swap aloud</span></button>
+            </div>
           </div>
         </div>
 
         <div class="field-grid">
           <div>
-            <label for="tm-itch">Itch: what buyer scratch did the category ignore?</label>
-            <textarea id="tm-itch">${escapeHtml(tm?.itch ?? "")}</textarea>
+            <label for="tm-itch">Itch: what real buyer frustration did the category ignore?</label>
+            <textarea id="tm-itch" aria-describedby="tm-itch-hint">${escapeHtml(tm?.itch ?? "")}</textarea>
+            <p id="tm-itch-hint" class="field-hint">Name the concrete pain or annoyance your buyer already feels before they ever meet you.</p>
           </div>
           <div>
-            <label for="tm-sticky">Sticky: what is the mental vending machine people repeat?</label>
-            <textarea id="tm-sticky">${escapeHtml(tm?.sticky ?? "")}</textarea>
+            <label for="tm-sticky">Sticky handle: what single image or phrase will people repeat to a friend?</label>
+            <textarea id="tm-sticky" aria-describedby="tm-sticky-hint">${escapeHtml(tm?.sticky ?? "")}</textarea>
+            <p id="tm-sticky-hint" class="field-hint">The memorable hook someone says in one breath when describing you (for Carvana, it is the glass car vending machine).</p>
           </div>
           <div>
-            <label for="tm-jack">Jack Black test: why would Brad Pitts sound ridiculous saying this?</label>
-            <textarea id="tm-jack">${escapeHtml(tm?.jackBlack ?? "")}</textarea>
+            <label for="tm-jack">Rival resistance: why would your top rivals sound absurd making this claim?</label>
+            <textarea id="tm-jack" aria-describedby="tm-jack-hint">${escapeHtml(tm?.jackBlack ?? "")}</textarea>
+            <p id="tm-jack-hint" class="field-hint">What in their business model, audience, or ego stops them from copying this tomorrow?</p>
           </div>
         </div>
 
@@ -544,7 +556,7 @@ ${workshopCss()}
       <!-- PITCH SATISFACTION -->
       <section id="sec-pitch" class="well${show(step, "pitch")}" aria-labelledby="h-pitch">
         <div class="stage-head">
-          <h2 id="h-pitch">Confirm pitch satisfaction</h2>
+          <h2 id="h-pitch" tabindex="-1">Confirm pitch satisfaction</h2>
           <span class="field-hint">Confirm every beat before generating pitch.html</span>
         </div>
         <div class="formula-preview" id="pitch-statement-display">${escapeHtml(session.statement || "No statement yet.")}</div>
@@ -565,7 +577,7 @@ ${workshopCss()}
       <!-- DONE -->
       <section id="sec-done" class="well${show(step, "done")}" aria-labelledby="h-done">
         <div class="stage-head">
-          <h2 id="h-done">Workshop complete</h2>
+          <h2 id="h-done" tabindex="-1">Workshop complete</h2>
           <span class="field-hint">Your philosophy deliverable is ready</span>
         </div>
         <div class="formula-preview" id="done-statement-display">${escapeHtml(session.statement || "No statement recorded.")}</div>
@@ -574,6 +586,8 @@ ${workshopCss()}
           <a href="${escapeHtml(pitchHref)}" class="btn btn--primary" id="done-pitch-link">Open pitch deliverable</a>
         </div>
       </section>
+
+      <div id="step-feedback" class="step-feedback" role="status" aria-live="polite" tabindex="-1" data-kind=""></div>
     </main>
 
     <aside id="coach-rail" class="coach-rail" aria-label="Coaching drawer">
@@ -605,7 +619,7 @@ ${workshopCss()}
 
         <div class="sync-footer">
           <button type="button" class="btn--ghost${isLive ? " hidden" : ""}" id="btn-copy-submit">Copy update for coach</button>
-          <p id="status" class="status-line" role="status" aria-live="polite"></p>
+          <p id="status" class="status-line"></p>
         </div>
       </section>
     </aside>
@@ -652,12 +666,30 @@ ${narratorClientScript()}
   var scripts = cfg.narratorScripts || {};
   var DRAFT_KEY = "onlyness_draft_" + (state.id || "default");
   var statusEl = document.getElementById("status");
+  var feedbackEl = document.getElementById("step-feedback");
   var dirtyFields = {};
   var spokenHints = {};
+  var checkedStatements = {};
+  var swapRivalIdx = 0;
 
-  function setStatus(msg) {
-    if (statusEl) statusEl.textContent = msg || "";
+  function setStatus(msg, kind) {
+    var text = msg || "";
+    if (statusEl) statusEl.textContent = text;
+    if (feedbackEl) {
+      feedbackEl.textContent = text;
+      feedbackEl.setAttribute("data-kind", text ? (kind || "info") : "");
+    }
   }
+
+  function clearInvalidOnEdit(node) {
+    if (node) node.setAttribute("aria-invalid", "false");
+  }
+
+  document.querySelectorAll("input, textarea, select").forEach(function (node) {
+    if (!node.hasAttribute("aria-invalid")) node.setAttribute("aria-invalid", "false");
+    node.addEventListener("input", function () { clearInvalidOnEdit(node); });
+    node.addEventListener("change", function () { clearInvalidOnEdit(node); });
+  });
 
   function el(id) { return document.getElementById(id); }
 
@@ -688,6 +720,7 @@ ${narratorClientScript()}
         offLabel: val("off-axis-label"),
         offTerritory: val("off-territory"),
         statement: val("statement"),
+        tmSwap: val("tm-swap"),
         tmItch: val("tm-itch"),
         tmSticky: val("tm-sticky"),
         tmJack: val("tm-jack"),
@@ -724,6 +757,9 @@ ${narratorClientScript()}
     if (typeof savedDraft.offSelfY === "number" && typeof offAns.selfY !== "number") offSelfY = savedDraft.offSelfY;
     if (Array.isArray(savedDraft.rivals) && !rivals.length) rivals = savedDraft.rivals;
     if (Array.isArray(savedDraft.cuts) && !cuts.length) cuts = savedDraft.cuts;
+    if (typeof savedDraft.tmSwap === "string" && savedDraft.tmSwap && el("tm-swap") && !el("tm-swap").value) {
+      el("tm-swap").value = savedDraft.tmSwap;
+    }
   }
 
   function clamp(n) {
@@ -764,21 +800,21 @@ ${narratorClientScript()}
       var cmd = "onlyness-axi submit " + state.id + " --json '" + JSON.stringify(payload).replace(/'/g, "'\\\\''") + "'";
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(cmd).then(function () {
-          setStatus("Saved in browser and copied CLI submit command for your coach.");
+          setStatus("Saved in browser and copied CLI submit command for your coach.", "ok");
         }).catch(function () {
-          setStatus("Saved in browser. Use 'Copy update for coach' to paste into chat.");
+          setStatus("Saved in browser. Use 'Copy update for coach' to paste into chat.", "info");
         });
       } else {
-        setStatus("Saved in browser. Use 'Copy update for coach' to paste into chat.");
+        setStatus("Saved in browser. Use 'Copy update for coach' to paste into chat.", "info");
       }
       return Promise.resolve();
     }
     return apiPost("submit", payload)
       .then(function () {
-        setStatus(okMsg || "Saved and synced with coach.");
+        setStatus(okMsg || "Saved and synced with coach.", "ok");
       })
       .catch(function (e) {
-        setStatus(String(e && e.message ? e.message : e));
+        setStatus(String(e && e.message ? e.message : e), "error");
         if (rethrow) throw e;
       });
   }
@@ -789,12 +825,12 @@ ${narratorClientScript()}
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(cmd).catch(function () {});
       }
-      setStatus("Standalone mode: run '" + cmd + "' in coach chat to return to " + target + ".");
+      setStatus("Standalone mode: run '" + cmd + "' in coach chat to return to " + target + ".", "info");
       return;
     }
     apiPost("revise", { step: target })
-      .then(function () { setStatus("Returned to " + target + "."); })
-      .catch(function (e) { setStatus(String(e && e.message ? e.message : e)); });
+      .then(function () { setStatus("Returned to " + target + ".", "info"); })
+      .catch(function (e) { setStatus(String(e && e.message ? e.message : e), "error"); });
   }
 
   // Paradox interactive toggle
@@ -1345,7 +1381,7 @@ ${narratorClientScript()}
     "stand-who", "stand-job", "stand-solved",
     "axis-left-pole", "axis-right-pole", "axis-if-win",
     "off-axis-label", "off-territory",
-    "tm-itch", "tm-sticky", "tm-jack"
+    "tm-swap", "tm-itch", "tm-sticky", "tm-jack"
   ].forEach(function (id) {
     var node = el(id);
     if (!node) return;
@@ -1448,13 +1484,14 @@ ${narratorClientScript()}
       return {
         payload: {
           truthmode: {
+            swap: val("tm-swap"),
             itch: val("tm-itch"),
             sticky: val("tm-sticky"),
             jackBlack: val("tm-jack"),
             cuts: cuts
           }
         },
-        clear: ["tm-itch", "tm-sticky", "tm-jack", "tm-cuts"],
+        clear: ["tm-swap", "tm-itch", "tm-sticky", "tm-jack", "tm-cuts"],
         msg: "Truthmode fields saved."
       };
     }
@@ -1473,20 +1510,144 @@ ${narratorClientScript()}
     };
   }
 
-  function advanceFromStep(stepId) {
+  function setStepButtonsBusy(row, busy) {
+    if (!row) return;
+    [row[0], row[1]].forEach(function (id) {
+      var btn = el(id);
+      if (btn) btn.disabled = !!busy;
+    });
+  }
+
+  function focusFirstMissingForStep(stepId) {
+    var rulesByStep = {
+      paradox: [{ id: "paradoxAck", check: function (n) { return !!n.checked; } }],
+      arena: ["arena-industry", "arena-offering", "arena-audience"],
+      stand: ["stand-who", "stand-job", "stand-solved"],
+      axis: ["axis-left-pole", "axis-right-pole", "axis-if-win"],
+      off_axis: ["off-territory"],
+      onlyness: ["statement"],
+      truthmode: ["tm-swap", "tm-itch", "tm-sticky", "tm-jack"],
+      pitch: [
+        { id: "sat-stand", check: function (n) { return !!n.checked; } },
+        { id: "sat-axis", check: function (n) { return !!n.checked; } },
+        { id: "sat-off", check: function (n) { return !!n.checked; } },
+        { id: "sat-only", check: function (n) { return !!n.checked; } },
+        { id: "sat-stmt", check: function (n) { return !!n.checked; } }
+      ]
+    };
+    var items = rulesByStep[stepId] || [];
+    var firstMissing = null;
+    items.forEach(function (item) {
+      var id = typeof item === "string" ? item : item.id;
+      var node = el(id);
+      if (!node) return;
+      var ok = typeof item === "string" ? (node.value || "").trim().length > 0 : item.check(node);
+      node.setAttribute("aria-invalid", ok ? "false" : "true");
+      if (!ok && !firstMissing) firstMissing = node;
+    });
+    if (firstMissing && typeof firstMissing.focus === "function") {
+      firstMissing.focus();
+      if (typeof firstMissing.scrollIntoView === "function") {
+        firstMissing.scrollIntoView({ block: "nearest" });
+      }
+    } else if (feedbackEl) {
+      if (typeof feedbackEl.focus === "function") feedbackEl.focus();
+      if (typeof feedbackEl.scrollIntoView === "function") {
+        feedbackEl.scrollIntoView({ block: "nearest" });
+      }
+    }
+  }
+
+  function buildRivalSwapText() {
+    var stmt = (val("statement") || state.statement || "").trim();
+    if (!stmt) {
+      setStatus("Draft an onlyness statement first.", "error");
+      return "";
+    }
+    var rivalName = "";
+    if (Array.isArray(rivals) && rivals.length > 0) {
+      rivalName = (rivals[swapRivalIdx % rivals.length].label || "").trim();
+      swapRivalIdx += 1;
+    }
+    if (!rivalName) {
+      var ind = state.arena && state.arena.industry ? String(state.arena.industry).trim() : "";
+      rivalName = "A generic rival in " + (ind || "your category");
+    }
+    var prefixRe = rules.prefixSource ? new RegExp(rules.prefixSource, "i") : /^(?:i am|we are)\\s+the\\s+only\\b/i;
+    var swapped = stmt.replace(prefixRe, rivalName + " is the only");
+    if (swapped === stmt) {
+      swapped = rivalName + " claims: " + stmt;
+    }
+    var swapEl = el("tm-swap");
+    if (swapEl) {
+      swapEl.value = swapped;
+      dirtyFields["tm-swap"] = true;
+      clearInvalidOnEdit(swapEl);
+    }
+    saveDraftLocal();
+    setStatus("Drafted adversarial swap using rival '" + rivalName + "'. Click Save truthmode or Next step.", "info");
+    return swapped;
+  }
+
+  function runTruthmodeCheck(silent, triggerBtn) {
+    var stmt = (val("statement") || state.statement || "").trim();
+    if (!stmt) {
+      if (!silent) setStatus("Draft an onlyness statement in Step 4 first.", "error");
+      return Promise.resolve();
+    }
+    if (!cfg.live || !cfg.token) {
+      var findings = runClientLint(stmt);
+      var summary = findings.map(function (f) { return f.text; }).join(" ");
+      var cmd = "onlyness-axi truthmode check " + state.id;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(cmd).catch(function () {});
+      }
+      var hasFail = findings.some(function (f) { return f.sev === "fail"; });
+      setStatus(summary + " (Copied '" + cmd + "' for coach chat.)", hasFail ? "error" : "info");
+      return Promise.resolve();
+    }
+    if (silent && checkedStatements[stmt]) return Promise.resolve();
+    checkedStatements[stmt] = true;
+    if (triggerBtn) triggerBtn.disabled = true;
+    return apiPost("truthmode-check", {})
+      .then(function (res) {
+        if (triggerBtn) triggerBtn.disabled = false;
+        var v = res && res.verdict ? res.verdict : "";
+        if (v === "fail") {
+          setStatus("Pass 1 rubric failed. Revise off-axis or rewrite your statement.", "error");
+          if (!silent) speakCue("truthmode_fail");
+        } else if (v === "weak") {
+          setStatus("Pass 1 rubric returned weak. Tighten the differentiator or add strong Pass 2 and 3 answers.", "info");
+        } else if (v === "pass") {
+          setStatus("Pass 1 rubric passed. Complete Pass 2 swap and Pass 3 answers.", "ok");
+          if (!silent) speakCue("truthmode_pass");
+        }
+        return res;
+      })
+      .catch(function (e) {
+        if (triggerBtn) triggerBtn.disabled = false;
+        if (!silent) setStatus(String(e && e.message ? e.message : e), "error");
+      });
+  }
+
+  function advanceFromStep(stepId, row) {
     var spec = stepSpec(stepId);
+    setStepButtonsBusy(row, true);
     submitPayload(spec.payload, spec.clear, spec.msg, true)
       .then(function () {
-        if (!cfg.live || !cfg.token) return;
+        if (!cfg.live || !cfg.token) return null;
         return apiPost("advance", {});
       })
       .then(function (res) {
+        setStepButtonsBusy(row, false);
         if (res && res.step) {
-          setStatus("Moved to " + res.step + ".");
+          setStatus("Moved to " + res.step + ".", "ok");
         }
       })
       .catch(function (e) {
-        setStatus(String(e && e.message ? e.message : e));
+        setStepButtonsBusy(row, false);
+        setStatus(String(e && e.message ? e.message : e), "error");
+        focusFirstMissingForStep(stepId);
       });
   }
 
@@ -1502,11 +1663,32 @@ ${narratorClientScript()}
   ].forEach(function (row) {
     bindClick(row[0], function () {
       var spec = stepSpec(row[2]);
-      submitPayload(spec.payload, spec.clear, spec.msg);
+      setStepButtonsBusy(row, true);
+      submitPayload(spec.payload, spec.clear, spec.msg, true)
+        .then(function () { setStepButtonsBusy(row, false); })
+        .catch(function () { setStepButtonsBusy(row, false); });
     });
     bindClick(row[1], function () {
-      advanceFromStep(row[2]);
+      advanceFromStep(row[2], row);
     });
+  });
+
+  bindClick("btn-run-truthmode-check", function () {
+    runTruthmodeCheck(false, el("btn-run-truthmode-check"));
+  });
+
+  bindClick("btn-gen-swap", function () {
+    buildRivalSwapText();
+  });
+
+  bindClick("btn-speak-swap", function () {
+    var txt = val("tm-swap").trim();
+    if (!txt) txt = buildRivalSwapText();
+    if (txt && window.OnlynessNarrator) {
+      try { localStorage.setItem("onlyness_narrator_audio", "1"); } catch (e) {}
+      window.OnlynessNarrator.say(txt);
+      window.OnlynessNarrator.replay();
+    }
   });
 
   bindClick("btn-send-human-msg", function () {
@@ -1525,22 +1707,22 @@ ${narratorClientScript()}
 
   bindClick("btn-examples", function () {
     if (!cfg.live || !cfg.token) {
-      setStatus("Ask your coach in chat for a fresh worked example tailored to your arena.");
+      setStatus("Ask your coach in chat for a fresh worked example tailored to your arena.", "info");
       return;
     }
     apiPost("need-coach", { reason: "examples" })
-      .then(function () { setStatus("Requested worked examples from coach."); })
-      .catch(function (e) { setStatus(String(e && e.message ? e.message : e)); });
+      .then(function () { setStatus("Requested worked examples from coach.", "ok"); })
+      .catch(function (e) { setStatus(String(e && e.message ? e.message : e), "error"); });
   });
 
   bindClick("btn-stuck", function () {
     if (!cfg.live || !cfg.token) {
-      setStatus("Ask your coach in chat: tell them where you feel stuck.");
+      setStatus("Ask your coach in chat: tell them where you feel stuck.", "info");
       return;
     }
     apiPost("need-coach", { reason: "stuck" })
-      .then(function () { setStatus("Flagged stuck for coach."); })
-      .catch(function (e) { setStatus(String(e && e.message ? e.message : e)); });
+      .then(function () { setStatus("Flagged stuck for coach.", "ok"); })
+      .catch(function (e) { setStatus(String(e && e.message ? e.message : e), "error"); });
   });
 
   bindClick("btn-weak", function () {
@@ -1549,12 +1731,12 @@ ${narratorClientScript()}
 
   bindClick("btn-accept-chill", function () {
     if (!cfg.live || !cfg.token) {
-      setStatus("Run 'onlyness-axi chill " + state.id + "' in your chat to pause.");
+      setStatus("Run 'onlyness-axi chill " + state.id + "' in your chat to pause.", "info");
       return;
     }
     apiPost("chill", { reason: "accepted coach chill offer" })
       .then(function () { window.location.reload(); })
-      .catch(function (e) { setStatus(String(e && e.message ? e.message : e)); });
+      .catch(function (e) { setStatus(String(e && e.message ? e.message : e), "error"); });
   });
 
   bindClick("btn-copy-submit", function () {
@@ -1582,6 +1764,7 @@ ${narratorClientScript()}
       },
       statement: val("statement"),
       truthmode: {
+        swap: val("tm-swap"),
         itch: val("tm-itch"),
         sticky: val("tm-sticky"),
         jackBlack: val("tm-jack"),
@@ -1669,13 +1852,13 @@ ${narratorClientScript()}
     syncStatementToFields(next.statement || "");
 
     var tm = next.truthmode || {};
+    setValSafe("tm-swap", tm.swap || "");
     setValSafe("tm-itch", tm.itch || "");
     setValSafe("tm-sticky", tm.sticky || "");
     setValSafe("tm-jack", tm.jackBlack || "");
     if (!dirtyFields["tm-cuts"] && Array.isArray(tm.cuts)) cuts = tm.cuts.slice();
 
     if (el("tm-statement-display")) el("tm-statement-display").textContent = next.statement || "No statement yet.";
-    if (el("tm-swap-display")) el("tm-swap-display").textContent = tm.swap || "Waiting for coach to run truthmode set-swap.";
     if (el("pitch-statement-display")) el("pitch-statement-display").textContent = next.statement || "No statement yet.";
     if (el("done-statement-display")) el("done-statement-display").textContent = next.statement || "No statement recorded.";
 
@@ -1688,7 +1871,7 @@ ${narratorClientScript()}
       vBadge.setAttribute("data-severity", tm.verdict === "pass" ? "pass" : tm.verdict === "fail" ? "fail" : "weak");
       vBadge.textContent = tm.verdict
         ? "Rubric verdict: " + tm.verdict
-        : "Run truthmode check via your coach to score the statement against the rubric.";
+        : "Click Run rubric check to score your statement against the Pass 1 rubric.";
       tmBox.appendChild(vBadge);
       if (Array.isArray(tm.checks) && tm.checks.length) {
         var ul = document.createElement("ul");
@@ -1756,8 +1939,17 @@ ${narratorClientScript()}
     updateOnlynessPreview();
 
     if (prevStep !== next.step) {
+      if (feedbackEl && feedbackEl.getAttribute("data-kind") === "error") {
+        setStatus("", "");
+      }
       var cue = next.step === "off_axis" ? "off_axis_intro" : next.step === "done" ? "done" : (next.step + "_intro");
       speakCue(cue);
+      var headingId = next.step === "off_axis" ? "h-off-axis" : "h-" + next.step;
+      var heading = el(headingId);
+      if (heading && typeof heading.focus === "function") heading.focus();
+    }
+    if (cfg.live && cfg.token && next.step === "truthmode" && (!tm || !tm.verdict) && next.statement && next.statement.trim()) {
+      runTruthmodeCheck(true);
     }
   }
 
@@ -1767,6 +1959,9 @@ ${narratorClientScript()}
   renderOffAxis2D();
   renderCuts();
   updateOnlynessPreview();
+  if (cfg.live && cfg.token && state.step === "truthmode" && (!state.truthmode || !state.truthmode.verdict) && state.statement && state.statement.trim()) {
+    runTruthmodeCheck(true);
+  }
 
   // Live SSE stream when running via 'onlyness-axi view'
   if (cfg.live && cfg.token && typeof EventSource !== "undefined") {

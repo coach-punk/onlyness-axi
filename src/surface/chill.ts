@@ -1,6 +1,6 @@
 import type { Session } from "../session/types.js";
 import { narratorClientScript, NARRATOR_SCRIPTS } from "./narrator.js";
-import { chillCss, KILN_FONTS_HTML } from "./styles.js";
+import { chillCss, KILN_FAVICON_HTML, KILN_FONTS_HTML } from "./styles.js";
 
 function escapeHtml(s: string): string {
   return s
@@ -43,6 +43,7 @@ export function renderChill(
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="description" content="Pause room for the Onlyness workshop session." />
 <title>Take a break | Onlyness workshop</title>
+${KILN_FAVICON_HTML}
 ${KILN_FONTS_HTML}
 <style>
 ${chillCss()}

@@ -1,6 +1,6 @@
 import type { AxisAnswer, OffAxisAnswer, RivalMarker, Session, StandAnswer } from "../session/types.js";
 import { narratorClientScript, NARRATOR_SCRIPTS } from "./narrator.js";
-import { KILN_FONTS_HTML, pitchCss } from "./styles.js";
+import { KILN_FAVICON_HTML, KILN_FONTS_HTML, pitchCss } from "./styles.js";
 
 function escapeHtml(s: string): string {
   return s
@@ -154,6 +154,7 @@ export function renderPitch(session: Session): string {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="description" content="Reverse-walk onlyness positioning deliverable for ${escapeHtml(offering)}." />
 <title>Onlyness pitch | ${escapeHtml(offering)}</title>
+${KILN_FAVICON_HTML}
 ${KILN_FONTS_HTML}
 <style>
 ${pitchCss()}

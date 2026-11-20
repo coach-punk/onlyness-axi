@@ -1,4 +1,5 @@
 import { resetBudgetIfAnswerChanged, substantiveChanged } from "./coach.js";
+import { runRubric } from "../truthmode/rubric.js";
 import type {
   Arena,
   AxisAnswer,
@@ -58,7 +59,7 @@ const WEAK_ADVANCE_STEPS: ReadonlySet<StepId> = new Set([
   "truthmode",
 ]);
 
-function emptyTruthmode(): TruthmodeState {
+export function emptyTruthmode(): TruthmodeState {
   return {
     verdict: null,
     checks: [],
@@ -182,7 +183,9 @@ export function stepAnswerBlob(session: Session): string {
     case "truthmode": {
       const t = session.truthmode;
       if (!t) return "";
-      return [t.itch, t.sticky, t.jackBlack, t.cuts.join("\n")].join("\n");
+      return [t.swap, t.itch, t.sticky, t.jackBlack, t.cuts.join("\n")].join(
+        "\n",
+      );
     }
     case "pitch": {
       const s = session.satisfaction;
@@ -265,7 +268,8 @@ export function canAdvance(session: Session): { ok: boolean; reason?: string } {
       if (!nonEmpty(t.swap)) {
         return {
           ok: false,
-          reason: "record Pass 2 adversarial swap via truthmode set-swap",
+          reason:
+            "fill Pass 2 adversarial swap (click Generate rival swap, write one, or run truthmode set-swap)",
         };
       }
       if (!nonEmpty(t.itch, t.sticky, t.jackBlack)) {
@@ -511,9 +515,19 @@ export function advanceSession(session: Session): Session {
   const gate = canAdvance(session);
   if (!gate.ok) throw new Error(gate.reason ?? "cannot advance");
   const next = nextStep(session.step);
+  let truthmode = session.truthmode;
+  if (next === "truthmode" && session.statement.trim().length > 0) {
+    const { verdict, checks } = runRubric(session.statement, session.arena);
+    truthmode = {
+      ...(session.truthmode ?? emptyTruthmode()),
+      verdict,
+      checks,
+    };
+  }
   return {
     ...session,
     step: next,
+    ...(truthmode !== null ? { truthmode } : {}),
     coachBudget: { used: 0, max: 3, lastJob: null },
     weakAdvance: false,
   };
